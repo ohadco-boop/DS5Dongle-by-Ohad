@@ -19,3 +19,7 @@
 
 ## v1.0.0
 - גרסת בסיס יציבה של DS5Dongle by Ohad עם OLED, Settings, REMAP, PowerCombo, Audio, Diagnostics וסלוטים.
+
+## 1.0.4 Audio Hotfix
+- Fixed AudioKeep + save + poweroff sequence: sends an audio-safe mute/off state to the controller before any forced flash write, waits briefly, then saves/disconnects.
+- Clears cached host audio route after local disconnect so the next connection starts clean.

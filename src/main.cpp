@@ -112,12 +112,43 @@ static void send_current_state_to_controller() {
     bt_write(outputData, sizeof(outputData));
 }
 
+static void send_audio_safe_state_before_flash_poweroff() {
+    // 1.0.4 audio hotfix:
+    // If AudioKeep left USB/BT audio active and the user then saves settings
+    // and powers off, a forced flash write could happen while the DualSense
+    // still thinks its audio route is active. Send one explicit audio-muted /
+    // powersave state first, then wait a short window before the flash write.
+    if (!bt_is_connected()) return;
+    uint8_t outputData[78]{};
+    outputData[0] = 0x31;
+    outputData[1] = reportSeqCounter << 4;
+    if (++reportSeqCounter == 256) reportSeqCounter = 0;
+    outputData[2] = 0x10;
+    state_set(outputData + 3, sizeof(SetStateData));
+
+    uint8_t *d = outputData + 3;
+    // SetStateData byte layout used by state_mgr.cpp/audio.cpp:
+    // d[0] flags: allow headphone volume, speaker volume, audio control.
+    // d[1] flags: allow audio mute/control2.
+    // d[4]/d[5]: headphone/speaker volume. d[7]: output path.
+    // d[9]: audio mute control. d[37]: audio control2 / speaker preamp.
+    d[0] |= 0x10 | 0x20 | 0x80;
+    d[1] |= 0x02 | 0x80;
+    d[4] = 0x00;       // headphones volume off
+    d[5] = 0x00;       // speaker volume off
+    d[7] = 0x30;       // neutral/default speaker path
+    d[9] = 0x20 | 0x40; // mute speaker + headphones
+    d[37] = 0x00;      // speaker preamp/control2 off
+    bt_write(outputData, sizeof(outputData));
+}
+
 // fixed65q: safe PS+Options power-off based on fixed65n.
 // Do not call bt_disconnect() directly from interrupt_loop(); it can race
 // pending OLED/settings/remap/lightbar flash saves and sometimes reset before
 // changes are persisted. This small state machine commits pending UI edits,
 // gives the flash/OLED path a short quiet window, then disconnects BT.
 static bool g_poweroff_pending = false;
+static uint32_t g_poweroff_save_at_us = 0;
 static uint32_t g_poweroff_disconnect_at_us = 0;
 
 // fixed65y: visible to the audio/HID paths so they can stop sending BT/audio
@@ -129,11 +160,14 @@ bool controller_poweroff_is_pending() {
 void controller_poweroff_request() {
     if (g_poweroff_pending) return;
     g_poweroff_pending = true;
+    g_poweroff_save_at_us = (uint32_t)time_us_32() + 300000u;
     g_poweroff_disconnect_at_us = 0;
-    // Freeze BT output immediately. This prevents a mic-on/audio-on stream or
-    // WebHID tester burst from queueing fresh 0x31/0x36 packets while the
-    // controller is being disconnected.
-    bt_output_guard_start_ms(700);
+    // AudioKeep can leave live audio running when the user saves settings and
+    // immediately powers off. Do NOT start the BT output guard before this
+    // packet, because the guard flushes/drops queued output. First send one
+    // explicit audio-safe state, then the service routine waits ~300 ms before
+    // touching flash.
+    send_audio_safe_state_before_flash_poweroff();
     oled_return_to_status_screen();
     oled_show_message("Powering Off...", 1000);
 }
@@ -142,9 +176,15 @@ static void controller_poweroff_service() {
     if (!g_poweroff_pending) return;
 
     if (g_poweroff_disconnect_at_us == 0) {
+        if ((int32_t)((uint32_t)time_us_32() - g_poweroff_save_at_us) < 0) {
+            return;
+        }
 #if !ENABLE_SERIAL
         watchdog_update();
 #endif
+        // Now that the controller has had time to receive the audio-safe state,
+        // freeze new output packets and commit pending flash writes.
+        bt_output_guard_start_ms(700);
         bt_flush_send_fifo();
         const bool saved_ok = oled_save_pending_changes_for_poweroff();
 #if !ENABLE_SERIAL
@@ -158,7 +198,9 @@ static void controller_poweroff_service() {
     if ((int32_t)((uint32_t)time_us_32() - g_poweroff_disconnect_at_us) >= 0) {
         bt_flush_send_fifo();
         bt_disconnect();
+        state_clear_host_audio_route();
         g_poweroff_pending = false;
+        g_poweroff_save_at_us = 0;
         g_poweroff_disconnect_at_us = 0;
     }
 }
