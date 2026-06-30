@@ -14,7 +14,7 @@
 #include "pico/time.h"
 
 constexpr uint32_t CONFIG_MAGIC = 0x66ccff00;
-constexpr uint16_t CONFIG_VERSION = 5;
+constexpr uint16_t CONFIG_VERSION = 6;
 constexpr uint32_t CONFIG_FLASH_OFFSET = PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE;
 static Config config{};
 bool is_dse = false;
@@ -175,8 +175,18 @@ void config_valid() {
         body->mic_gain_db_plus24 = 24;
         printf("[Config] mic_gain_db_plus24 invalid, defaulting to 0 dB reference\n");
     }
+    if (body->keep_awake_on_audio > 1) { // 0xFF erased / upgrade → Ohad default ON
+        body->keep_awake_on_audio = 1;
+        printf("[Config] keep_awake_on_audio invalid, defaulting to 1 (on)\n");
+    }
     if (body->config_version != CONFIG_VERSION) {
-        if (previous_body_config_version == 4) {
+        if (previous_body_config_version == 5) {
+            // DS5Dongle by Ohad 1.0.4: add AudioKeep ON while preserving the
+            // user's existing 1.0.0 settings.
+            body->keep_awake_on_audio = 1;
+            body->config_version = CONFIG_VERSION;
+            printf("[Config] Migrated to 1.0.4: AudioKeep default ON\n");
+        } else if (previous_body_config_version == 4) {
             // DS5Dongle by Ohad 1.0.0 Stable:
             // Re-reference Mic Gain so old -20 dB becomes new 0 dB.
             const int old_db = (int)body->mic_gain_db_plus24 - 24;
@@ -188,7 +198,7 @@ void config_valid() {
             printf("[Config] Migrated mic gain reference: old %d dB -> new %+d dB\n", old_db, new_ref_db);
         } else {
             body->config_version = CONFIG_VERSION;
-            // DS5Dongle by Ohad 1.0.0 Stable defaults.
+            // DS5Dongle by Ohad 1.0.4 Stable defaults.
             body->polling_rate_mode = 2;
             body->lightbar_mode = 9;              // BATT
             body->auto_haptics_enable = 0;        // Haptics/AutoHap Off
@@ -199,7 +209,8 @@ void config_valid() {
             body->remap_enable = 0;               // Remap Off
             body->screen_brightness = 5;          // OLED Bright 50%
             body->inactive_time = 5;              // fixed65u idle menu default: 5 min
-            printf("[Config] Warning: config version changed, applying DS5Dongle by Ohad 1.0.0 Stable defaults\n");
+            body->keep_awake_on_audio = 1;        // AudioKeep On
+            printf("[Config] Warning: config version changed, applying DS5Dongle by Ohad 1.0.4 Stable defaults\n");
         }
     }
 }

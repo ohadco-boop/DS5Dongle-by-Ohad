@@ -18,6 +18,7 @@
 #include "config.h"
 
 // fixed65ac: set by TinyUSB audio interface callback in main.cpp.
+extern bool spk_active;
 extern volatile bool usb_mic_stream_active;
 #include "state_mgr.h"
 #include "usb.h"
@@ -159,6 +160,7 @@ uint32_t opus_fifo_drops() { return 0; }
 static volatile uint32_t g_usb_frames = 0;
 static volatile uint32_t g_bt_packets = 0;
 uint32_t audio_usb_frames() { return g_usb_frames; }
+bool audio_usb_active() { return spk_active || usb_mic_stream_active; }
 uint32_t audio_bt_packets() { return g_bt_packets; }
 
 // Rolling-peak meters for the OLED VU screen. Updated during audio_loop's

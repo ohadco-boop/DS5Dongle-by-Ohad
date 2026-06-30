@@ -18,10 +18,10 @@
 #include "pico/time.h"
 
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION "1.0.0 Final"
+#define FIRMWARE_VERSION "1.0.4"
 #endif
 #ifndef FIRMWARE_VERSION_SHORT
-#define FIRMWARE_VERSION_SHORT "1.0.0"
+#define FIRMWARE_VERSION_SHORT "1.0.4"
 #endif
 
 // Ohad Final branding:
@@ -191,7 +191,7 @@ constexpr int kLbModeBattery = 9;
 constexpr int kNumLbModes = 10;
 
 // Settings screen state
-constexpr int kNumSettingsItems = 20; // fixed65u: InactDC removed; Idle includes Off/1/2/3/5/10/20/30
+constexpr int kNumSettingsItems = 21; // fixed65u: InactDC removed; Idle includes Off/1/2/3/5/10/20/30
 constexpr int kSettingsAutoHapEnaIdx  = 7;
 constexpr int kSettingsAutoHapGainIdx = 8;
 constexpr int kSettingsAutoHapLpIdx   = 9;
@@ -203,8 +203,9 @@ constexpr int kSettingsScrOffIdx      = 14;
 constexpr int kSettingsBtMicIdx       = 15;
 constexpr int kSettingsCtrlWakeIdx    = 16;
 constexpr int kSettingsPowerComboIdx  = 17;
-constexpr int kSettingsResetIdx       = 18;
-constexpr int kSettingsWipeSlotsIdx   = 19;
+constexpr int kSettingsAudioKeepIdx   = 18;
+constexpr int kSettingsResetIdx       = 19;
+constexpr int kSettingsWipeSlotsIdx   = 20;
 Config_body settings_local{};
 int settings_sel = 0;
 bool settings_dirty = false;
@@ -1838,6 +1839,7 @@ void settings_adjust(int delta) {
         case 15: c.bt_mic_enable ^= 1; break; // BT mic on/off
         case 16: c.controller_wakes_display ^= 1; break; // controller activity wakes OLED on/off
         case 17: c.power_combo_enable ^= 1; break; // PS+Options power-off combo on/off
+        case 18: c.keep_awake_on_audio ^= 1; break; // Audio keeps idle poweroff awake
     }
 }
 void settings_handle_input() {
@@ -1959,8 +1961,9 @@ __attribute__((noinline)) void format_settings_item(int idx, char* line, size_t 
         case 15: snprintf(line, n, "%s BT Mic %s", cur, c.bt_mic_enable ? "on" : "off"); break;
         case 16: snprintf(line, n, "%s CtrlWake %s", cur, c.controller_wakes_display ? "on" : "off"); break;
         case 17: snprintf(line, n, "%s PowerCombo %s", cur, c.power_combo_enable ? "on" : "off"); break;
-        case 18: snprintf(line, n, "%s Reset to defaults", cur); break;
-        case 19: snprintf(line, n, "%s Wipe all slots", cur); break;
+        case 18: snprintf(line, n, "%s AudioKeep %s", cur, c.keep_awake_on_audio ? "on" : "off"); break;
+        case 19: snprintf(line, n, "%s Reset to defaults", cur); break;
+        case 20: snprintf(line, n, "%s Wipe all slots", cur); break;
     }
 }
 __attribute__((noinline)) void render_screen_settings() {
@@ -2176,10 +2179,19 @@ void boot_splash() {
         int n = 0; while (s[n]) n++;
         return (128 - (n * 6 - 1)) / 2;
     };
-    const char* l1 = OHAD_BOOT_TITLE;
-    draw_text(cx_for(l1), 28, l1);
+
+    // DS5Dongle by Ohad 1.0.4: final branded boot screen.
+    // Keep it simple and monochrome so it matches the real 128x64 SH1107 OLED.
+    const char* l1 = "DS5Dongle";
+    const char* l2 = "by Ohad";
+    char vline[18];
+    snprintf(vline, sizeof(vline), "v%s", FIRMWARE_VERSION_SHORT);
+
+    draw_text(cx_for(l1), 14, l1);
+    draw_text(cx_for(l2), 29, l2);
+    draw_text(cx_for(vline), 44, vline);
     flush_fb();
-    sleep_ms(1500);
+    sleep_ms(1000);
 }
 
 } // namespace

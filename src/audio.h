@@ -26,6 +26,7 @@ uint8_t  audio_peak_haptic();    // 0..255, decays on read
 
 // Byte-flow counters for the Diagnostics screen + web emulator.
 uint32_t audio_usb_frames();
+bool audio_usb_active();       // true while USB speaker or mic audio interface is streaming
 uint32_t audio_bt_packets();
 uint32_t audio_mic_frames();   // count of mic Opus frames decoded + written
 int32_t  audio_mic_last_decoded(); // last opus_decode return — neg = error, 480 = OK

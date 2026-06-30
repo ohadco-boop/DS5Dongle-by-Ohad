@@ -1,7 +1,7 @@
 name: Build OLED RAM-audio UF2
 
 env:
-  FIRMWARE_VERSION: 1.0.0
+  FIRMWARE_VERSION: 1.0.4
 
 on:
   push:

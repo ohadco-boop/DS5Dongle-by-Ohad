@@ -20,6 +20,7 @@
 #include "pico/util/queue.h"
 #include "slots.h"
 #include "oled.h"
+#include "audio.h"
 #if ENABLE_BATT_LED
 #include "battery_led.h"
 #endif
@@ -639,13 +640,22 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
                     inactive_time = get_absolute_time();
                 } else if (absolute_time_diff_us(inactive_time, get_absolute_time()) >
                            static_cast<int64_t>(get_config().inactive_time) * 60 * 1000 * 1000) {
-                    // fixed65v: idle timeout should behave like the manual
-                    // PowerCombo shutdown: show Powering Off..., commit pending
-                    // OLED/settings/remap/lightbar changes, wait briefly, then
-                    // disconnect. Do not call bt_disconnect() directly here.
-                    printf("idle timeout: safe controller poweroff\n");
-                    inactive_time = get_absolute_time();
-                    controller_poweroff_request();
+                    // DS5Dongle by Ohad 1.0.4: optional AudioKeep. If the host is
+                    // actively streaming USB audio, keep the controller connected
+                    // so it can be used as a wireless music/headset endpoint. The
+                    // normal idle poweroff resumes once audio is no longer active.
+                    if (get_config().keep_awake_on_audio && audio_usb_active()) {
+                        inactive_time = get_absolute_time();
+                        printf("idle timeout skipped: USB audio active\n");
+                    } else {
+                        // fixed65v: idle timeout should behave like the manual
+                        // PowerCombo shutdown: show Powering Off..., commit pending
+                        // OLED/settings/remap/lightbar changes, wait briefly, then
+                        // disconnect. Do not call bt_disconnect() directly here.
+                        printf("idle timeout: safe controller poweroff\n");
+                        inactive_time = get_absolute_time();
+                        controller_poweroff_request();
+                    }
                 }
             }
         } else if (channel == hid_control_cid) {

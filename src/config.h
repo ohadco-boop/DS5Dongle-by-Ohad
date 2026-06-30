@@ -72,6 +72,11 @@ struct __attribute__((packed)) Config_body {
     // Runtime reference is shifted down 20 dB, so display 0 dB equals the
     // old fixed65am Mic Gain -20 dB level.
     uint8_t mic_gain_db_plus24;
+    // DS5Dongle by Ohad 1.0.4: when enabled, active USB audio prevents the
+    // physical-input idle timer from powering off the controller. This lets the
+    // controller stay connected while listening to music, but still powers off
+    // after idle once the audio stream stops.
+    uint8_t keep_awake_on_audio; // bool: 0=normal idle poweroff, 1=audio keeps awake
 };
 
 struct __attribute__((packed)) Config {
