@@ -1,9 +1,9 @@
-# User Manual - DS5Dongle by Ohad v1.0.4
+# User Manual - DS5Dongle by Ohad v1.0.5
 
 ## What is DS5Dongle by Ohad?
 DS5Dongle by Ohad is a Raspberry Pi Pico 2 W based dongle that connects a DualSense controller to a computer over Bluetooth and exposes it over USB. The Waveshare Pico-OLED-1.3 display shows connection status, settings, diagnostics, audio status, button remapping, and pairing slot information.
 
-Version 1.0.4 is the first stable release in the 1.0.x branch. The UF2 file name is `DS5Dongle-by-Ohad-1.0.4.uf2`.
+Version 1.0.5 is the first stable release in the 1.0.x branch. The UF2 file name is `DS5Dongle-by-Ohad-1.0.5.uf2`.
 
 ## Quick start
 1. Connect the Pico 2 W to the computer using USB.
@@ -103,7 +103,7 @@ When AudioKeep is ON, Idle shutdown will not power off the controller while the 
 ## Firmware update
 1. Hold BOOTSEL on the Pico and connect USB.
 2. A drive named `RPI-RP2` appears.
-3. Drag `DS5Dongle-by-Ohad-1.0.4.uf2` onto the drive.
+3. Drag `DS5Dongle-by-Ohad-1.0.5.uf2` onto the drive.
 4. The Pico reboots into the new firmware.
 
 ## Quick troubleshooting

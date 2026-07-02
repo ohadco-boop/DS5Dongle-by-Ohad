@@ -1,4 +1,4 @@
-# DS5Dongle by Ohad v1.0.4
+# DS5Dongle by Ohad v1.0.5
 
 
 ## שפה
@@ -11,12 +11,12 @@ Firmware מותאם ל-Raspberry Pi Pico 2 W עם מסך Waveshare Pico-OLED-1.3
 ![Boot](assets/oled/oled_sc00_boot.jpg)
 
 
-## תיקון Audio Route ב-1.0.4
+## תיקון Audio Route ב-1.0.5
 
 החבילה הזו כוללת תיקון התאוששות אוטומטית לאודיו אחרי שימוש באתרי בדיקה כמו DualSense Tester. אם האתר פותח את הזרמת האודיו ואז נסגר או מפסיק לשלוח packets, הקושחה מחזירה את מסלול האודיו לבד בלי צורך לחבר/לנתק אוזניות.
 
 ## קבצים חשובים
-- `DS5Dongle-by-Ohad-1.0.4.uf2` - נוצר ב-GitHub Actions לאחר build.
+- `DS5Dongle-by-Ohad-1.0.5.uf2` - נוצר ב-GitHub Actions לאחר build.
 - `USER_MANUAL.pdf` - מדריך שימוש מלא.
 - `PRODUCT_SPECIFICATION.pdf` - מפרט מוצר.
 - `CHANGELOG.md` - היסטוריית גרסאות.
@@ -38,13 +38,13 @@ Firmware מותאם ל-Raspberry Pi Pico 2 W עם מסך Waveshare Pico-OLED-1.3
 
 ```yaml
 .github/workflows/build.yml
-FIRMWARE_VERSION: 1.0.4
+FIRMWARE_VERSION: 1.0.5
 ```
 
 ה-artifact שייצא מה-build יהיה:
 
 ```text
-DS5Dongle-by-Ohad-1.0.4.uf2
+DS5Dongle-by-Ohad-1.0.5.uf2
 ```
 
 ## שימוש מהיר
@@ -63,3 +63,8 @@ DS5Dongle-by-Ohad-1.0.4.uf2
 
 ## מסמכים
 קרא את `USER_MANUAL.pdf` לשימוש רגיל ואת `PRODUCT_SPECIFICATION.pdf` למפרט טכני.
+
+
+## גרסה 1.0.5
+
+נוסף ממשק OLED בעברית כאופציה. ברירת המחדל נשארת אנגלית. משנים דרך `Settings -> Language` ושומרים עם משולש.

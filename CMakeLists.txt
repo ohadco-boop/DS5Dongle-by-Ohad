@@ -282,9 +282,9 @@ if(WAKE_DEBUG)
             WAKE_DEBUG
     )
 endif()
-set(VERSION "1.0.4" CACHE STRING "Program version string")
+set(VERSION "1.0.5" CACHE STRING "Program version string")
 # Keep the numeric OLED title in CMake too. VERSION may include a suffix
-# such as "Final", but the OLED status title should be "DS5Dongle 1.0.4".
+# such as "Final", but the OLED status title should be "DS5Dongle 1.0.5".
 string(REGEX MATCH "^[0-9]+\\.[0-9]+\\.[0-9]+" VERSION_SHORT "${VERSION}")
 if(NOT VERSION_SHORT)
     set(VERSION_SHORT "${VERSION}")

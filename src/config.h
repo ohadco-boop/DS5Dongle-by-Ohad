@@ -77,6 +77,9 @@ struct __attribute__((packed)) Config_body {
     // controller stay connected while listening to music, but still powers off
     // after idle once the audio stream stops.
     uint8_t keep_awake_on_audio; // bool: 0=normal idle poweroff, 1=audio keeps awake
+    // DS5Dongle by Ohad 1.0.5: OLED UI language. 0=English, 1=Hebrew.
+    // English remains the safe default so existing users keep the old UI after upgrade.
+    uint8_t ui_language;
 };
 
 struct __attribute__((packed)) Config {

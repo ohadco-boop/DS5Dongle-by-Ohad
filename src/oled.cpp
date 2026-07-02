@@ -1,5 +1,6 @@
 #include "oled.h"
 #include "oled_font.h"
+#include "oled_hebrew_font.h"
 #include "bt.h"
 #include "slots.h"
 #include "audio.h"
@@ -18,10 +19,10 @@
 #include "pico/time.h"
 
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION "1.0.4"
+#define FIRMWARE_VERSION "1.0.5"
 #endif
 #ifndef FIRMWARE_VERSION_SHORT
-#define FIRMWARE_VERSION_SHORT "1.0.4"
+#define FIRMWARE_VERSION_SHORT "1.0.5"
 #endif
 
 // Ohad Final branding:
@@ -191,7 +192,7 @@ constexpr int kLbModeBattery = 9;
 constexpr int kNumLbModes = 10;
 
 // Settings screen state
-constexpr int kNumSettingsItems = 21; // fixed65u: InactDC removed; Idle includes Off/1/2/3/5/10/20/30
+constexpr int kNumSettingsItems = 22; // fixed65u: InactDC removed; Idle includes Off/1/2/3/5/10/20/30
 constexpr int kSettingsAutoHapEnaIdx  = 7;
 constexpr int kSettingsAutoHapGainIdx = 8;
 constexpr int kSettingsAutoHapLpIdx   = 9;
@@ -204,8 +205,9 @@ constexpr int kSettingsBtMicIdx       = 15;
 constexpr int kSettingsCtrlWakeIdx    = 16;
 constexpr int kSettingsPowerComboIdx  = 17;
 constexpr int kSettingsAudioKeepIdx   = 18;
-constexpr int kSettingsResetIdx       = 19;
-constexpr int kSettingsWipeSlotsIdx   = 20;
+constexpr int kSettingsLanguageIdx    = 19;
+constexpr int kSettingsResetIdx       = 20;
+constexpr int kSettingsWipeSlotsIdx   = 21;
 Config_body settings_local{};
 int settings_sel = 0;
 bool settings_dirty = false;
@@ -405,6 +407,93 @@ void draw_text(int x, int y, const char *s) {
         draw_char(x, y, *s++);
         x += 6;
     }
+}
+
+bool ui_hebrew() {
+    return get_config().ui_language == 1;
+}
+
+uint32_t utf8_next(const char **ps) {
+    const unsigned char *s = (const unsigned char *)(*ps);
+    if (s[0] < 0x80) { *ps += 1; return s[0]; }
+    if ((s[0] & 0xE0) == 0xC0 && s[1]) {
+        *ps += 2;
+        return ((uint32_t)(s[0] & 0x1F) << 6) | (uint32_t)(s[1] & 0x3F);
+    }
+    if ((s[0] & 0xF0) == 0xE0 && s[1] && s[2]) {
+        *ps += 3;
+        return ((uint32_t)(s[0] & 0x0F) << 12) |
+               ((uint32_t)(s[1] & 0x3F) << 6) |
+               (uint32_t)(s[2] & 0x3F);
+    }
+    *ps += 1;
+    return '?';
+}
+
+const HebrewGlyph8* hebrew_glyph(uint32_t cp) {
+    for (int i = 0; i < kHebrewGlyph8Count; ++i) {
+        if (kHebrewGlyph8[i].codepoint == cp) return &kHebrewGlyph8[i];
+    }
+    return nullptr;
+}
+
+int hebrew_char_width(uint32_t cp) {
+    if (cp == ' ') return 4;
+    if (cp == '-' || cp == '/' || cp == ':' || cp == '.' || cp == ',') return 4;
+    if (cp >= '0' && cp <= '9') return 6;
+    const HebrewGlyph8 *g = hebrew_glyph(cp);
+    return g ? (int)g->width : 6;
+}
+
+int hebrew_text_width(const char *s) {
+    int w = 0;
+    const char *p = s;
+    while (*p) {
+        uint32_t cp = utf8_next(&p);
+        w += hebrew_char_width(cp) + 1;
+    }
+    return w > 0 ? w - 1 : 0;
+}
+
+void draw_hebrew_char_left(int x, int y, uint32_t cp) {
+    if (cp == ' ') return;
+    if (cp >= 0x20 && cp <= 0x7E) { draw_char(x, y, (char)cp); return; }
+    const HebrewGlyph8 *g = hebrew_glyph(cp);
+    if (!g) return;
+    for (int row = 0; row < 8; ++row) {
+        const uint8_t bits = g->rows[row];
+        for (int col = 0; col < 8; ++col) {
+            if (bits & (1u << (7 - col))) px(x + col, y + row, true);
+        }
+    }
+}
+
+// Draw a Hebrew string right-aligned. Hebrew glyph order is rendered from
+// right to left; short ASCII values are kept readable by drawing each ASCII
+// run left-to-right inside its reserved width.
+void draw_hebrew_r(int right_x, int y, const char *s) {
+    const char *p = s;
+    uint32_t cps[48];
+    int n = 0;
+    while (*p && n < (int)(sizeof(cps) / sizeof(cps[0]))) cps[n++] = utf8_next(&p);
+    int x = right_x;
+    for (int i = 0; i < n; ++i) {
+        const uint32_t cp = cps[i];
+        const int w = hebrew_char_width(cp);
+        x -= w;
+        draw_hebrew_char_left(x, y, cp);
+        x -= 1;
+    }
+}
+
+void draw_title(const char *en, const char *he) {
+    if (ui_hebrew()) draw_hebrew_r(126, 0, he);
+    else draw_text(6, 0, en);
+}
+
+void draw_no_controller(int x, int y) {
+    if (ui_hebrew()) draw_hebrew_r(126, y, "אין שלט");
+    else draw_text(x, y, "(no controller)");
 }
 
 // Button-chrome strip on the left edge of every screen. KEY0 (top button)
@@ -894,10 +983,16 @@ __attribute__((noinline)) void render_screen() {
         if (b8 & 0x01) rect_filled(42, 30, 8, 3);  else rect_outline(42, 30, 8, 3);  // L1
         if (b8 & 0x02) rect_filled(80, 30, 12, 3); else rect_outline(80, 30, 12, 3); // R1
     } else {
-        draw_text(kContentX, 14, "Pair your DualSense:");
-        draw_text(kContentX, 26, "1. Hold Create + PS");
-        draw_text(kContentX, 36, "2. Wait for light bar");
-        draw_text(kContentX, 46, "   to flash blue");
+        if (ui_hebrew()) {
+            draw_hebrew_r(126, 14, "צימוד שלט");
+            draw_hebrew_r(126, 26, "לחץ יצירה ופיאס");
+            draw_hebrew_r(126, 38, "המתן להבהוב כחול");
+        } else {
+            draw_text(kContentX, 14, "Pair your DualSense:");
+            draw_text(kContentX, 26, "1. Hold Create + PS");
+            draw_text(kContentX, 36, "2. Wait for light bar");
+            draw_text(kContentX, 46, "   to flash blue");
+        }
     }
 
     flush_fb();
@@ -905,7 +1000,7 @@ __attribute__((noinline)) void render_screen() {
 
 __attribute__((noinline)) void render_screen_rssi() {
     fb_clear();
-    draw_text(kContentX, 0, "BT Signal");
+    draw_title("BT Signal", "אות בלוטות");
     if (bt_is_connected()) {
         int8_t rssi = 0;
         bt_get_signal_strength(&rssi);
@@ -930,7 +1025,7 @@ __attribute__((noinline)) void render_screen_rssi() {
         snprintf(buf, sizeof(buf), "Link: %s", label);
         draw_text(kContentX, 48, buf);
     } else {
-        draw_text(kContentX, 30, "(no controller)");
+        draw_no_controller(kContentX, 30);
     }
     flush_fb();
 }
@@ -1059,7 +1154,7 @@ void diag_handle_input(int visible) {
 
 __attribute__((noinline)) void render_screen_diag() {
     fb_clear();
-    draw_text(kContentX, 0, "Diagnostics");
+    draw_title("Diagnostics", "אבחון");
 
     sample_diag_rates();
     constexpr int kVisible = 5;
@@ -1081,7 +1176,7 @@ __attribute__((noinline)) void render_screen_diag() {
 
 __attribute__((noinline)) void render_screen_cpu(bool entered) {
     fb_clear();
-    draw_text(kContentX, 0, "CPU / Clock");
+    draw_title("CPU / Clock", "מעבד שעון");
 
     char buf[24];
 
@@ -1150,7 +1245,7 @@ void triggers_handle_input() {
 __attribute__((noinline)) void render_screen_triggers() {
     triggers_handle_input();
     fb_clear();
-    draw_text(kContentX, 0, "Trigger Test");
+    draw_title("Trigger Test", "בדיקת טריגר");
 
     char buf[24];
     snprintf(buf, sizeof(buf), "Mode: %s", kTrigPresetNames[trigger_preset]);
@@ -1169,10 +1264,10 @@ __attribute__((noinline)) void render_screen_triggers() {
         int rfill = (r2 * 52) / 255;
         if (rfill > 0) rect_filled(74, 37, rfill, 5);
     } else {
-        draw_text(kContentX, 24, "(no controller)");
+        draw_no_controller(kContentX, 24);
     }
 
-    draw_text(kContentX, 56, "Tri=cycle");
+    if (ui_hebrew()) draw_hebrew_r(126, 56, "משולש מחליף"); else draw_text(kContentX, 56, "Tri=cycle");
     flush_fb();
 }
 
@@ -1257,7 +1352,7 @@ inline int16_t imu_apply(int index, int16_t raw) {
 
 __attribute__((noinline)) void render_screen_gyro() {
     fb_clear();
-    draw_text(kContentX, 0, "Gyro Tilt");
+    draw_title("Gyro Tilt", "גיירו");
     if (bt_is_connected()) {
         int16_t ax, ay, az;
         memcpy(&ax, &interrupt_in_data[21], 2);
@@ -1292,14 +1387,14 @@ __attribute__((noinline)) void render_screen_gyro() {
         if (cy > by + bh - 3) cy = by + bh - 3;
         rect_filled(cx - 1, cy - 1, 3, 3);
     } else {
-        draw_text(kContentX, 30, "(no controller)");
+        draw_no_controller(kContentX, 30);
     }
     flush_fb();
 }
 
 __attribute__((noinline)) void render_screen_touchpad() {
     fb_clear();
-    draw_text(kContentX, 0, "Touchpad");
+    draw_title("Touchpad", "משטח מגע");
     if (bt_is_connected()) {
         rect_outline(kContentX + 2, 12, 116, 30);
         int active = 0;
@@ -1326,7 +1421,7 @@ __attribute__((noinline)) void render_screen_touchpad() {
         snprintf(buf, sizeof(buf), "Fingers: %d", active);
         draw_text(kContentX, 46, buf);
     } else {
-        draw_text(kContentX, 30, "(no controller)");
+        draw_no_controller(kContentX, 30);
     }
     flush_fb();
 }
@@ -1397,7 +1492,7 @@ void lightbar_handle_input() {
 __attribute__((noinline)) void render_screen_lightbar() {
     lightbar_handle_input();
     fb_clear();
-    draw_text(kContentX, 0, "Lightbar");
+    draw_title("Lightbar", "תאורה");
     draw_text(86, 0, lb_mode_tag(lb_mode));
 
     if (bt_is_connected()) {
@@ -1416,7 +1511,7 @@ __attribute__((noinline)) void render_screen_lightbar() {
         // fixed65: HOST/BATT only, no favorites/effects UI.
         lb_last_face = interrupt_in_data[7] & 0xF0;
 
-        draw_text(kContentX, 38, "Modes: HOST / BATT");
+        if (ui_hebrew()) draw_hebrew_r(126, 38, "מצבי תאורה"); else draw_text(kContentX, 38, "Modes: HOST / BATT");
         const char* hint =
             (lb_mode == kLbModeHost) ? "Host controls LED" :
                                        "Battery B->R 25%";
@@ -1424,9 +1519,9 @@ __attribute__((noinline)) void render_screen_lightbar() {
         // No send here: lightbar_service() owns pushing the color to the
         // controller every frame, on this screen and every other.
     } else {
-        draw_text(kContentX, 30, "(no controller)");
+        draw_no_controller(kContentX, 30);
     }
-    draw_text(kContentX, 56, "R1=mode");
+    if (ui_hebrew()) draw_hebrew_r(126, 56, "כפתור עליון מצב"); else draw_text(kContentX, 56, "R1=mode");
     flush_fb();
 }
 
@@ -1567,7 +1662,7 @@ void lightbar_save_config() {
 
 __attribute__((noinline)) void render_screen_vu() {
     fb_clear();
-    draw_text(kContentX, 0, "Audio Meters");
+    draw_title("Audio Meters", "מד שמע");
     if (bt_is_connected()) {
         const uint8_t spk = audio_peak_speaker();
         const uint8_t hap = audio_peak_haptic();
@@ -1584,9 +1679,9 @@ __attribute__((noinline)) void render_screen_vu() {
         int hfill = (hap * 76) / 255;
         if (hfill > 0) rect_filled(50, 30, hfill, 4);
 
-        draw_text(kContentX, 42, "Live USB audio peaks");
+        if (ui_hebrew()) draw_hebrew_r(126, 42, "שמע חי"); else draw_text(kContentX, 42, "Live USB audio peaks");
     } else {
-        draw_text(kContentX, 30, "(no controller)");
+        draw_no_controller(kContentX, 30);
     }
     flush_fb();
 }
@@ -1708,7 +1803,8 @@ __attribute__((noinline)) void render_screen_remap() {
     fb_clear();
     char buf[24];
     snprintf(buf, sizeof(buf), "Remap %s", remap_dirty ? "(*)" : "   ");
-    draw_text(kContentX, 0, buf);
+    if (ui_hebrew()) draw_hebrew_r(126, 0, remap_dirty ? "מיפוי כוכב" : "מיפוי");
+    else draw_text(kContentX, 0, buf);
     if (remap_save_status[0]) draw_text(86, 0, remap_save_status);
 
     constexpr int kVisible = 5;
@@ -1720,8 +1816,13 @@ __attribute__((noinline)) void render_screen_remap() {
         draw_text(kContentX, 9 + i * 9, line);
     }
 
-    if (remap_sel == kRemapResetIdx) draw_text(kContentX, 56, "Left/Right defaults Tri=save");
-    else                            draw_text(kContentX, 56, "DP nav/adj  Tri=save");
+    if (remap_sel == kRemapResetIdx) {
+        if (ui_hebrew()) draw_hebrew_r(126, 56, "ימין שמאל ברירת מחדל");
+        else draw_text(kContentX, 56, "Left/Right defaults Tri=save");
+    } else {
+        if (ui_hebrew()) draw_hebrew_r(126, 56, "חצים משנים משולש שומר");
+        else draw_text(kContentX, 56, "DP nav/adj  Tri=save");
+    }
     flush_fb();
 }
 
@@ -1840,6 +1941,7 @@ void settings_adjust(int delta) {
         case 16: c.controller_wakes_display ^= 1; break; // controller activity wakes OLED on/off
         case 17: c.power_combo_enable ^= 1; break; // PS+Options power-off combo on/off
         case 18: c.keep_awake_on_audio ^= 1; break; // Audio keeps idle poweroff awake
+        case 19: c.ui_language ^= 1; break; // OLED UI language English/Hebrew
     }
 }
 void settings_handle_input() {
@@ -1962,10 +2064,112 @@ __attribute__((noinline)) void format_settings_item(int idx, char* line, size_t 
         case 16: snprintf(line, n, "%s CtrlWake %s", cur, c.controller_wakes_display ? "on" : "off"); break;
         case 17: snprintf(line, n, "%s PowerCombo %s", cur, c.power_combo_enable ? "on" : "off"); break;
         case 18: snprintf(line, n, "%s AudioKeep %s", cur, c.keep_awake_on_audio ? "on" : "off"); break;
-        case 19: snprintf(line, n, "%s Reset to defaults", cur); break;
-        case 20: snprintf(line, n, "%s Wipe all slots", cur); break;
+        case 19: snprintf(line, n, "%s Language %s", cur, c.ui_language ? "HE" : "EN"); break;
+        case 20: snprintf(line, n, "%s Reset to defaults", cur); break;
+        case 21: snprintf(line, n, "%s Wipe all slots", cur); break;
     }
 }
+
+const char* settings_label_he(int idx) {
+    switch (idx) {
+        case 0: return "רטט";
+        case 1: return "רמקול";
+        case 2: return "כיבוי אוטו";
+        case 3: return "נורת פיקו";
+        case 4: return "דגימה";
+        case 5: return "חוצץ שמע";
+        case 6: return "מצב שלט";
+        case 7: return "רטט שמע";
+        case 8: return "עוצמת רטט";
+        case 9: return "סינון רטט";
+        case 10: return "בהירות";
+        case 11: return "סיבוב מסך";
+        case 12: return "מיקרופון";
+        case 13: return "עמעום מסך";
+        case 14: return "כיבוי מסך";
+        case 15: return "מיק בלוטות";
+        case 16: return "שלט מעיר";
+        case 17: return "קומבו כיבוי";
+        case 18: return "שמירת שמע";
+        case 19: return "שפה";
+        case 20: return "איפוס הגדרות";
+        case 21: return "מחיקת חיבורים";
+    }
+    return "";
+}
+
+void format_settings_value(int idx, char* out, size_t n) {
+    const Config_body &c = settings_local;
+    switch (idx) {
+        case 0: {
+            int g = (int)(c.haptics_gain * 10.0f + 0.5f);
+            snprintf(out, n, "%d.%dx", g / 10, g % 10);
+            break;
+        }
+        case 1: snprintf(out, n, "%ddB", (int)c.speaker_volume); break;
+        case 2:
+            if (c.disable_inactive_disconnect) snprintf(out, n, "off");
+            else snprintf(out, n, "%umin", c.inactive_time);
+            break;
+        case 3: snprintf(out, n, "%s", c.disable_pico_led ? "off" : "on"); break;
+        case 4: {
+            const char* names[3] = {"250Hz", "500Hz", "RT"};
+            snprintf(out, n, "%s", names[c.polling_rate_mode % 3]);
+            break;
+        }
+        case 5: snprintf(out, n, "%u", c.audio_buffer_length); break;
+        case 6: {
+            const char* names[3] = {"DS5", "DSE", "Auto"};
+            snprintf(out, n, "%s", names[c.controller_mode % 3]);
+            break;
+        }
+        case 7: {
+            const char* names[4] = {"Off", "Fallback", "Mix", "Replace"};
+            snprintf(out, n, "%s", names[c.auto_haptics_enable & 3]);
+            break;
+        }
+        case 8: snprintf(out, n, "%u%%", c.auto_haptics_gain); break;
+        case 9: {
+            const char* names[4] = {"80Hz", "160Hz", "250Hz", "400Hz"};
+            snprintf(out, n, "%s", names[c.auto_haptics_lowpass & 3]);
+            break;
+        }
+        case 10: snprintf(out, n, "%d%%", brightness_percent_from_idx(c.screen_brightness)); break;
+        case 11: snprintf(out, n, "%s", c.screen_rotation ? "180" : "Normal"); break;
+        case 12: {
+            const int db = (int)c.mic_gain_db_plus24 - 24;
+            if (db >= 0) snprintf(out, n, "+%ddB", db);
+            else         snprintf(out, n, "%ddB", db);
+            break;
+        }
+        case 13:
+            if (c.screen_dim_timeout == 0) snprintf(out, n, "off");
+            else snprintf(out, n, "%umin", c.screen_dim_timeout);
+            break;
+        case 14:
+            if (c.screen_off_timeout == 0) snprintf(out, n, "off");
+            else snprintf(out, n, "%umin", c.screen_off_timeout);
+            break;
+        case 15: snprintf(out, n, "%s", c.bt_mic_enable ? "on" : "off"); break;
+        case 16: snprintf(out, n, "%s", c.controller_wakes_display ? "on" : "off"); break;
+        case 17: snprintf(out, n, "%s", c.power_combo_enable ? "on" : "off"); break;
+        case 18: snprintf(out, n, "%s", c.keep_awake_on_audio ? "on" : "off"); break;
+        case 19: snprintf(out, n, "%s", c.ui_language ? "HE" : "EN"); break;
+        case 20: snprintf(out, n, "hold"); break;
+        case 21: snprintf(out, n, "hold"); break;
+        default: out[0] = 0; break;
+    }
+}
+
+void draw_settings_item_he(int idx, int y) {
+    const bool sel = (idx == settings_sel);
+    draw_char(kContentX, y, sel ? '>' : ' ');
+    char value[18];
+    format_settings_value(idx, value, sizeof(value));
+    draw_text(kContentX + 7, y, value);
+    draw_hebrew_r(126, y, settings_label_he(idx));
+}
+
 __attribute__((noinline)) void render_screen_settings() {
     if (!settings_init_done) {
         settings_local = get_config();
@@ -1974,28 +2178,44 @@ __attribute__((noinline)) void render_screen_settings() {
     settings_handle_input();
 
     fb_clear();
-    char buf[24];
-    snprintf(buf, sizeof(buf), "Settings %s", settings_dirty ? "(*)" : "   ");
-    draw_text(kContentX, 0, buf);
-    if (settings_save_status[0]) {
-        draw_text(86, 0, settings_save_status);
-    }
-
     constexpr int kVisible = 5;
     int top = 0;
     if (settings_sel >= kVisible) top = settings_sel - kVisible + 1;
-    char line[28];
-    for (int i = 0; i < kVisible && top + i < kNumSettingsItems; i++) {
-        format_settings_item(top + i, line, sizeof(line));
-        draw_text(kContentX, 9 + i * 9, line);
-    }
 
-    if (settings_sel == kSettingsResetIdx) {
-        draw_text(kContentX, 56, "Hold Tri 2s = RESET");
-    } else if (settings_sel == kSettingsWipeSlotsIdx) {
-        draw_text(kContentX, 56, "Hold Tri 2s = WIPE");
+    if (ui_hebrew()) {
+        draw_hebrew_r(126, 0, settings_dirty ? "הגדרות כוכב" : "הגדרות");
+        if (settings_save_status[0]) draw_text(kContentX, 0, settings_save_status);
+        for (int i = 0; i < kVisible && top + i < kNumSettingsItems; i++) {
+            draw_settings_item_he(top + i, 9 + i * 9);
+        }
+        if (settings_sel == kSettingsResetIdx) {
+            draw_hebrew_r(126, 56, "החזק משולש לאיפוס");
+        } else if (settings_sel == kSettingsWipeSlotsIdx) {
+            draw_hebrew_r(126, 56, "החזק משולש למחיקה");
+        } else {
+            draw_hebrew_r(126, 56, "חצים משנים משולש שומר");
+        }
     } else {
-        draw_text(kContentX, 56, "DP nav/adj  Tri=save");
+        char buf[24];
+        snprintf(buf, sizeof(buf), "Settings %s", settings_dirty ? "(*)" : "   ");
+        draw_text(kContentX, 0, buf);
+        if (settings_save_status[0]) {
+            draw_text(86, 0, settings_save_status);
+        }
+
+        char line[28];
+        for (int i = 0; i < kVisible && top + i < kNumSettingsItems; i++) {
+            format_settings_item(top + i, line, sizeof(line));
+            draw_text(kContentX, 9 + i * 9, line);
+        }
+
+        if (settings_sel == kSettingsResetIdx) {
+            draw_text(kContentX, 56, "Hold Tri 2s = RESET");
+        } else if (settings_sel == kSettingsWipeSlotsIdx) {
+            draw_text(kContentX, 56, "Hold Tri 2s = WIPE");
+        } else {
+            draw_text(kContentX, 56, "DP nav/adj  Tri=save");
+        }
     }
     flush_fb();
 }
@@ -2075,7 +2295,8 @@ __attribute__((noinline)) void render_screen_slots() {
     const int active = bt_get_slot();
     const bool conn = bt_is_connected();
     snprintf(hdr, sizeof(hdr), "Slots         [s%d %s]", active, conn ? "ON" : "--");
-    draw_text(kContentX, 0, hdr);
+    if (ui_hebrew()) draw_hebrew_r(126, 0, "חיבורים");
+    else draw_text(kContentX, 0, hdr);
 
     if (slots_status[0] && (uint32_t)time_us_32() < slots_status_until_us) {
         draw_text(80, 0, slots_status);
@@ -2096,7 +2317,7 @@ __attribute__((noinline)) void render_screen_slots() {
         draw_text(kContentX, 9 + i * 9, line);
     }
 
-    draw_text(kContentX, 56, "Tri=switch Sq hold=wipe");
+    if (ui_hebrew()) draw_hebrew_r(126, 56, "משולש החלף ריבוע מחק"); else draw_text(kContentX, 56, "Tri=switch Sq hold=wipe");
     flush_fb();
 }
 
@@ -2148,7 +2369,7 @@ bool oled_save_pending_changes_for_poweroff_internal() {
         wrote = true;
     }
 
-    // DS5Dongle by Ohad 1.0.4:
+    // DS5Dongle by Ohad 1.0.5:
     // Also commit an already-deferred Save-pending config. Pressing Triangle
     // while USB audio is active stores the new config in RAM and clears
     // settings_dirty, but intentionally delays flash. If the controller is
@@ -2180,7 +2401,7 @@ void boot_splash() {
         return (128 - (n * 6 - 1)) / 2;
     };
 
-    // DS5Dongle by Ohad 1.0.4: final branded boot screen.
+    // DS5Dongle by Ohad 1.0.5: final branded boot screen.
     // Keep it simple and monochrome so it matches the real 128x64 SH1107 OLED.
     const char* l1 = "DS5Dongle";
     const char* l2 = "by Ohad";

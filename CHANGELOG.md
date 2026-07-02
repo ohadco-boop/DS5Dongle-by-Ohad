@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## 1.0.5 - Hebrew OLED UI
+
+- Added optional Hebrew OLED UI language.
+- Added `Settings -> Language` with English/Hebrew toggle.
+- Added a compact Hebrew bitmap font for the 128x64 OLED.
+- Localized main OLED screen titles, Settings labels, Remap title/footer, pairing hints and status messages.
+- Default language remains English for existing users.
+- Based on 1.0.4 Stable + AudioRouteFix + PoweroffTouchpadWdtFix.
+
+
+## 1.0.4 - Poweroff Touchpad Watchdog Fix
+
+- Fixed a case where touching the DualSense touchpad during controller power-off could keep high-rate HID interrupt reports flowing and trip the Pico watchdog.
+- The safe power-off guard now remains active until the real HCI DISCONNECTION_COMPLETE event, instead of ending immediately after sending the disconnect command.
+- Late controller interrupt reports are dropped during intentional power-off to keep Bluetooth/USB teardown quiet.
+- The original AudioRouteFix is preserved. Fix2/Fix3 and Tester TTL behavior are not included.
+
+
 ### 1.0.4 PoweroffWatchdogFix
 - Prevented false Pico watchdog resets during intentional controller power-off after long audio/game sessions.
 - Kept the watchdog enabled, but extended the timeout from 1 s to 3 s and feeds it during the safe BT teardown path.

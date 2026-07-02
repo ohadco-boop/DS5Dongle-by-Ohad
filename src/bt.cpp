@@ -117,6 +117,8 @@ static int g_current_slot = 0;
 bool bt_disconnect();  // fwd decl — defined further down
 // fixed65v: route idle auto-poweroff through the same safe save/OLED path as PS+Options.
 extern void controller_poweroff_request();
+extern bool controller_poweroff_is_pending();
+extern void controller_poweroff_note_bt_disconnected();
 
 // Keep the dongle discoverable while at least one slot is empty (covers
 // initial setup + partial-wipe states). Once all 4 slots are full, go
@@ -601,6 +603,7 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
             device_found = false;
             new_pair = false;
             connect_attempt_started = 0; // disarm — every teardown clears here
+            controller_poweroff_note_bt_disconnected();
             acl_handle = HCI_CON_HANDLE_INVALID;
             bt_rssi = 0;
             hid_control_cid = 0;
@@ -641,6 +644,14 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
 
     if (packet_type == L2CAP_DATA_PACKET) {
         if (channel == hid_interrupt_cid) {
+            // During local safe power-off, drop late controller interrupt input
+            // immediately. A finger on the touchpad can generate a high-rate
+            // stream while hci_disconnect() is pending; processing those reports
+            // during teardown is unnecessary and was observed to trip the Pico
+            // watchdog. HCI/L2CAP teardown events are still processed normally.
+            if (controller_poweroff_is_pending()) {
+                return;
+            }
             // printf("[L2CAP] HID Interrupt data len=%u\n", size);
             // printf_hexdump(packet, size);
             bt_data_callback(INTERRUPT, packet, size);

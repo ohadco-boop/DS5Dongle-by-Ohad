@@ -1,9 +1,9 @@
-# מדריך שימוש - DS5Dongle by Ohad v1.0.4
+# מדריך שימוש - DS5Dongle by Ohad v1.0.5
 
 ## מה זה DS5Dongle by Ohad
 DS5Dongle by Ohad הוא דונגל המבוסס Raspberry Pi Pico 2 W שמחבר שלט DualSense למחשב דרך Bluetooth, ומציג מצב, הגדרות ובדיקות על מסך OLED של Waveshare Pico-OLED-1.3.
 
-הגרסה הזו מוגדרת כגרסת Stable ראשונה של ענף 1.0.x: שם קובץ ה-UF2 הוא `DS5Dongle-by-Ohad-1.0.4.uf2`.
+הגרסה הזו מוגדרת כגרסת Stable ראשונה של ענף 1.0.x: שם קובץ ה-UF2 הוא `DS5Dongle-by-Ohad-1.0.5.uf2`.
 
 ## התחלה מהירה
 1. מחברים את Pico 2 W למחשב בעזרת USB.
@@ -102,7 +102,7 @@ PowerCombo ו-Idle משתמשים במסלול כיבוי בטוח: הדונגל
 ## עדכון Firmware
 1. לוחצים על BOOTSEL בפיקו ומחברים USB.
 2. נפתח כונן בשם RPI-RP2.
-3. גוררים אליו את `DS5Dongle-by-Ohad-1.0.4.uf2`.
+3. גוררים אליו את `DS5Dongle-by-Ohad-1.0.5.uf2`.
 4. הפיקו מבצע reboot ומעלה את הגרסה החדשה.
 
 ## פתרון תקלות קצר

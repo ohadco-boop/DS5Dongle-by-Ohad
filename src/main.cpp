@@ -148,6 +148,7 @@ static void send_audio_safe_state_before_flash_poweroff() {
 // changes are persisted. This small state machine commits pending UI edits,
 // gives the flash/OLED path a short quiet window, then disconnects BT.
 static bool g_poweroff_pending = false;
+static bool g_poweroff_disconnect_sent = false;
 static uint32_t g_poweroff_save_at_us = 0;
 static uint32_t g_poweroff_disconnect_at_us = 0;
 
@@ -160,6 +161,7 @@ bool controller_poweroff_is_pending() {
 void controller_poweroff_request() {
     if (g_poweroff_pending) return;
     g_poweroff_pending = true;
+    g_poweroff_disconnect_sent = false;
     g_poweroff_save_at_us = (uint32_t)time_us_32() + 300000u;
     g_poweroff_disconnect_at_us = 0;
     // AudioKeep can leave live audio running when the user saves settings and
@@ -170,6 +172,18 @@ void controller_poweroff_request() {
     send_audio_safe_state_before_flash_poweroff();
     oled_return_to_status_screen();
     oled_show_message("Powering Off...", 1000);
+}
+
+void controller_poweroff_note_bt_disconnected() {
+    // Keep the safe-poweroff guard active until the real HCI disconnect event.
+    // Touchpad activity can keep high-rate interrupt reports flowing while the
+    // shutdown is in progress; if we clear the guard immediately after sending
+    // hci_disconnect(), those reports can race the teardown path and trip the
+    // watchdog. The BT layer calls this from HCI_EVENT_DISCONNECTION_COMPLETE.
+    g_poweroff_pending = false;
+    g_poweroff_disconnect_sent = false;
+    g_poweroff_save_at_us = 0;
+    g_poweroff_disconnect_at_us = 0;
 }
 
 static void controller_poweroff_service() {
@@ -183,6 +197,12 @@ static void controller_poweroff_service() {
     // the watchdog remains enabled for real hangs elsewhere.
     watchdog_update();
 #endif
+
+    if (g_poweroff_disconnect_sent) {
+        // Waiting for HCI_EVENT_DISCONNECTION_COMPLETE. Do not send another
+        // disconnect command; just keep the watchdog alive while BTStack drains.
+        return;
+    }
 
     if (g_poweroff_disconnect_at_us == 0) {
         if ((int32_t)((uint32_t)time_us_32() - g_poweroff_save_at_us) < 0) {
@@ -214,9 +234,10 @@ static void controller_poweroff_service() {
         watchdog_update();
 #endif
         state_clear_host_audio_route();
-        g_poweroff_pending = false;
-        g_poweroff_save_at_us = 0;
-        g_poweroff_disconnect_at_us = 0;
+        // Do not clear g_poweroff_pending here. Keep the guard active until the
+        // BT stack confirms disconnection, so late touchpad/input reports are
+        // ignored during teardown instead of racing watchdog-sensitive paths.
+        g_poweroff_disconnect_sent = true;
     }
 }
 
