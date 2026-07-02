@@ -1,3 +1,8 @@
+## v1.0.4 - Audio Route Fix 2
+- Added transient WebHID audio-route expiry for DualSense Tester.
+- Fixes the case where YouTube/system audio keeps sending USB packets while the tester tab leaves the controller cached on a tester-selected speaker/headset route.
+- Normal interrupt OUT audio routing from games remains persistent; only control/WebHID route reports expire.
+
 # CHANGELOG
 
 ## v1.0.4 - Audio Route Fix

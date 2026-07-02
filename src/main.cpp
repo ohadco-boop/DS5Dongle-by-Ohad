@@ -602,6 +602,28 @@ void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t rep
             g_host_out02_trig_allow++;
         }
 
+        // WebHID/Control SET_REPORT audio routing (DualSense Tester) is not a
+        // persistent OS/game route. Browsers usually do not send a "restore"
+        // SetStateData when the tab closes, so mark only control-path audio
+        // reports as temporary. Normal interrupt OUT reports from games are not
+        // affected and remain persistent.
+        constexpr uint8_t kOut02AllowHeadphoneVolume = 0x10;
+        constexpr uint8_t kOut02AllowSpeakerVolume   = 0x20;
+        constexpr uint8_t kOut02AllowMicVolume       = 0x40;
+        constexpr uint8_t kOut02AllowAudioControl    = 0x80;
+        constexpr uint8_t kOut02AllowAudioMute       = 0x02;
+        constexpr uint8_t kOut02AllowAudioControl2   = 0x80;
+        const bool audio_route_report =
+            (out02_payload[0] & (kOut02AllowHeadphoneVolume |
+                                 kOut02AllowSpeakerVolume |
+                                 kOut02AllowMicVolume |
+                                 kOut02AllowAudioControl)) ||
+            (out02_payload[1] & (kOut02AllowAudioMute |
+                                 kOut02AllowAudioControl2));
+        if (out02_from_control && audio_route_report) {
+            audio_webhid_audio_route_report_seen();
+        }
+
         // USB-side behavior: accept the report immediately, even during the
         // BT connect guard. This matches a wired DualSense better than dropping
         // SET_REPORT entirely, and it lets WebHID audio-route changes be picked
