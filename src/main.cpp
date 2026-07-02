@@ -175,6 +175,15 @@ void controller_poweroff_request() {
 static void controller_poweroff_service() {
     if (!g_poweroff_pending) return;
 
+#if !ENABLE_SERIAL
+    // DS5Dongle 1.0.4 PoweroffWatchdogFix:
+    // A planned controller power-off can spend longer than the original 1 s
+    // watchdog window inside BT teardown after a long audio/game session. Keep
+    // the Pico watchdog fed while the safe power-off state machine is active;
+    // the watchdog remains enabled for real hangs elsewhere.
+    watchdog_update();
+#endif
+
     if (g_poweroff_disconnect_at_us == 0) {
         if ((int32_t)((uint32_t)time_us_32() - g_poweroff_save_at_us) < 0) {
             return;
@@ -196,8 +205,14 @@ static void controller_poweroff_service() {
     }
 
     if ((int32_t)((uint32_t)time_us_32() - g_poweroff_disconnect_at_us) >= 0) {
+#if !ENABLE_SERIAL
+        watchdog_update();
+#endif
         bt_flush_send_fifo();
         bt_disconnect();
+#if !ENABLE_SERIAL
+        watchdog_update();
+#endif
         state_clear_host_audio_route();
         g_poweroff_pending = false;
         g_poweroff_save_at_us = 0;
@@ -602,28 +617,6 @@ void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t rep
             g_host_out02_trig_allow++;
         }
 
-        // WebHID/Control SET_REPORT audio routing (DualSense Tester) is not a
-        // persistent OS/game route. Browsers usually do not send a "restore"
-        // SetStateData when the tab closes, so mark only control-path audio
-        // reports as temporary. Normal interrupt OUT reports from games are not
-        // affected and remain persistent.
-        constexpr uint8_t kOut02AllowHeadphoneVolume = 0x10;
-        constexpr uint8_t kOut02AllowSpeakerVolume   = 0x20;
-        constexpr uint8_t kOut02AllowMicVolume       = 0x40;
-        constexpr uint8_t kOut02AllowAudioControl    = 0x80;
-        constexpr uint8_t kOut02AllowAudioMute       = 0x02;
-        constexpr uint8_t kOut02AllowAudioControl2   = 0x80;
-        const bool audio_route_report =
-            (out02_payload[0] & (kOut02AllowHeadphoneVolume |
-                                 kOut02AllowSpeakerVolume |
-                                 kOut02AllowMicVolume |
-                                 kOut02AllowAudioControl)) ||
-            (out02_payload[1] & (kOut02AllowAudioMute |
-                                 kOut02AllowAudioControl2));
-        if (out02_from_control && audio_route_report) {
-            audio_webhid_audio_route_report_seen();
-        }
-
         // USB-side behavior: accept the report immediately, even during the
         // BT connect guard. This matches a wired DualSense better than dropping
         // SET_REPORT entirely, and it lets WebHID audio-route changes be picked
@@ -752,7 +745,12 @@ int main() {
     oled_init();
 
 #if !ENABLE_SERIAL
-    watchdog_enable(1000, true);
+    // DS5Dongle 1.0.4 PoweroffWatchdogFix:
+    // 1 s was too aggressive during intentional BT teardown after long sessions
+    // and could reboot the Pico even though nothing had crashed. 3 s still
+    // recovers real hangs quickly, but avoids false watchdog resets on clean
+    // controller power-off.
+    watchdog_enable(3000, true);
 #endif
 
     while (1) {

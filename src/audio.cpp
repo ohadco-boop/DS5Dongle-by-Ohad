@@ -81,16 +81,8 @@ static volatile uint32_t g_usb_speaker_if_change_us = 0;
 static volatile uint32_t g_usb_speaker_last_packet_us = 0;
 static volatile bool     g_usb_speaker_idle_recovered = false;
 static volatile bool     g_usb_mic_if_active = false;
-static volatile uint32_t g_webhid_audio_route_last_us = 0;
-static volatile bool     g_webhid_audio_route_armed = false;
 static constexpr uint32_t USB_SPK_START_GRACE_US = 1200000u;
 static constexpr uint32_t USB_SPK_IDLE_US        = 900000u;
-// WebHID/DualSense Tester route changes are intentionally transient.
-// When the tab closes it normally does not send a restore SetStateData, while
-// normal system audio (YouTube, games, etc.) may continue sending USB speaker
-// packets. Expire only control/WebHID audio-route writes; interrupt OUT reports
-// from real games remain persistent.
-static constexpr uint32_t WEBHID_AUDIO_ROUTE_TTL_US = 2500000u;
 
 static void audio_force_route_refresh_ms(uint32_t ms) {
     const uint64_t until = time_us_64() + (uint64_t)ms * 1000ULL;
@@ -123,11 +115,6 @@ void audio_usb_microphone_interface_changed(bool active) {
     g_usb_mic_if_active = active;
 }
 
-void audio_webhid_audio_route_report_seen() {
-    g_webhid_audio_route_last_us = time_us_32();
-    g_webhid_audio_route_armed = true;
-}
-
 static bool audio_speaker_effectively_active() {
     if (!spk_active) return false;
     const uint32_t now = time_us_32();
@@ -151,23 +138,9 @@ static bool audio_microphone_effectively_active() {
 static void audio_route_recovery_service() {
     if (controller_poweroff_is_pending()) return;
     if (!bt_is_connected()) return;
-
-    const uint32_t now = time_us_32();
-
-    if (g_webhid_audio_route_armed &&
-        (uint32_t)(now - g_webhid_audio_route_last_us) >= WEBHID_AUDIO_ROUTE_TTL_US) {
-        // DualSense Tester/WebHID can leave AudioControl cached on the DS5 after
-        // the tab closes. Closing the tab does not generate a USB "site closed"
-        // event, and YouTube may keep USB speaker packets flowing, so packet-idle
-        // recovery cannot fire. Treat only control/WebHID audio-route writes as
-        // temporary and restore the normal physical/default route automatically.
-        state_clear_host_audio_route();
-        audio_force_route_refresh_ms(2000);
-        g_webhid_audio_route_armed = false;
-    }
-
     if (!spk_active) return;
 
+    const uint32_t now = time_us_32();
     const uint32_t last = g_usb_speaker_last_packet_us;
     const uint32_t opened = g_usb_speaker_if_change_us;
     bool packet_idle = false;

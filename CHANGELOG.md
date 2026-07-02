@@ -1,9 +1,10 @@
-## v1.0.4 - Audio Route Fix 2
-- Added transient WebHID audio-route expiry for DualSense Tester.
-- Fixes the case where YouTube/system audio keeps sending USB packets while the tester tab leaves the controller cached on a tester-selected speaker/headset route.
-- Normal interrupt OUT audio routing from games remains persistent; only control/WebHID route reports expire.
-
 # CHANGELOG
+
+### 1.0.4 PoweroffWatchdogFix
+- Prevented false Pico watchdog resets during intentional controller power-off after long audio/game sessions.
+- Kept the watchdog enabled, but extended the timeout from 1 s to 3 s and feeds it during the safe BT teardown path.
+- No changes to AudioRouteFix behavior, Tester route behavior, or USB audio descriptors.
+
 
 ## v1.0.4 - Audio Route Fix
 - Added automatic USB Audio route recovery when a browser or tester page stops the audio stream without a headset plug/unplug event.

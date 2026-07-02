@@ -21,6 +21,7 @@
 #include "slots.h"
 #include "oled.h"
 #include "audio.h"
+#include "hardware/watchdog.h"
 #if ENABLE_BATT_LED
 #include "battery_led.h"
 #endif
@@ -257,6 +258,9 @@ void bt_send_control(uint8_t *data, uint16_t len) {
 }
 
 bool bt_disconnect() {
+#if !ENABLE_SERIAL
+    watchdog_update();
+#endif
     // fixed65: a manual/controller disconnect makes every queued output stale.
     bt_flush_send_fifo();
     g_output_guard_until = 0;
@@ -266,6 +270,9 @@ bool bt_disconnect() {
 
     // 0x13 = remote user terminated connection
     hci_send_cmd(&hci_disconnect, acl_handle, 0x13);
+#if !ENABLE_SERIAL
+    watchdog_update();
+#endif
     return true;
 }
 
@@ -584,7 +591,9 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
 
         case HCI_EVENT_DISCONNECTION_COMPLETE: {
 #if !ENABLE_SERIAL
+            watchdog_update();
             tud_disconnect();
+            watchdog_update();
 #endif
             gap_connectable_control(1);
             update_discoverable();
@@ -597,6 +606,9 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
             hid_control_cid = 0;
             hid_interrupt_cid = 0;
             bt_flush_send_fifo();
+#if !ENABLE_SERIAL
+            watchdog_update();
+#endif
             g_output_guard_until = 0;
             feature_data.clear();
             cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, false);
@@ -604,7 +616,13 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
             battery_led_on_disconnect();
 #endif
             printf("[HCI] Disconnected reason=0x%02X, start inquiry\n", reason);
+#if !ENABLE_SERIAL
+            watchdog_update();
+#endif
             gap_inquiry_start(30);
+#if !ENABLE_SERIAL
+            watchdog_update();
+#endif
             break;
         }
 

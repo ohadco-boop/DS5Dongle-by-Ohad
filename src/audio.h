@@ -33,10 +33,6 @@ bool audio_usb_active();       // true while USB speaker or mic audio interface 
 // These are intentionally state-machine hooks, not diagnostics.
 void audio_usb_speaker_interface_changed(bool active);
 void audio_usb_microphone_interface_changed(bool active);
-// WebHID/Control SET_REPORT can select a temporary speaker/headset route
-// (DualSense Tester). Unlike games, it may not send a restore report when the
-// tab closes, so the route must expire back to the physical/default path.
-void audio_webhid_audio_route_report_seen();
 
 uint32_t audio_bt_packets();
 uint32_t audio_mic_frames();   // count of mic Opus frames decoded + written
