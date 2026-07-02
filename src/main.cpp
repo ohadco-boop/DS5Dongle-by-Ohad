@@ -520,10 +520,22 @@ bool tud_audio_set_itf_cb(uint8_t rhport, tusb_control_request_t const *p_reques
 
     if (itf == 1) {
         printf("[AUDIO] Set interface Speaker to alternate setting %d\n", alt);
-        spk_active = alt != 0;
+        const bool new_active = alt != 0;
+        if (spk_active != new_active) {
+            spk_active = new_active;
+            audio_usb_speaker_interface_changed(new_active);
+        } else {
+            spk_active = new_active;
+        }
     } else if (itf == 2) {
         printf("[AUDIO] Set interface Microphone to alternate setting %d\n", alt);
-        usb_mic_stream_active = alt != 0;
+        const bool new_active = alt != 0;
+        if (usb_mic_stream_active != new_active) {
+            usb_mic_stream_active = new_active;
+            audio_usb_microphone_interface_changed(new_active);
+        } else {
+            usb_mic_stream_active = new_active;
+        }
     }
 
     return true;
@@ -611,11 +623,12 @@ void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t rep
         // converting a page-init burst into many standalone BT 0x31 packets.
         const uint32_t now_us = time_us_32();
 
-        if (spk_active) {
-            // Not forwarded as a standalone 0x31 — the trigger FFB just
-            // written into state[] rides the 0x36 audio frames instead.
-            // Count the trigger-bearing ones so the Diag screen shows
-            // trig_allow == to_bt(trig) + folded (issue #6: not drops).
+        if (audio_usb_active()) {
+            // Not forwarded as a standalone 0x31 while there is real USB audio
+            // packet flow — the trigger/route state written into state[] rides
+            // the next 0x36 audio frame instead. Use effective audio activity,
+            // not only the raw alt setting, so a stale browser/tester stream
+            // cannot keep swallowing output reports after packets stop.
             if (trigger_report) g_host_out02_trig_folded++;
             return;
         }

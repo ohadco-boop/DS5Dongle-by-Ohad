@@ -19,6 +19,11 @@
 - `CHANGELOG.md` - English changelog.
 - `CHANGELOG_HE.md` - Hebrew changelog.
 
+
+## Latest 1.0.4 audio route fix
+
+This package includes the Audio Route Fix for browser/tester audio recovery. If a page such as DualSense Tester opens the audio stream and then closes or stops sending packets, the firmware recovers the controller audio route automatically without requiring a headset plug/unplug event.
+
 ## Main features
 
 - DualSense Bluetooth bridge.

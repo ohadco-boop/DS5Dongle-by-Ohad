@@ -10,6 +10,11 @@ Firmware מותאם ל-Raspberry Pi Pico 2 W עם מסך Waveshare Pico-OLED-1.3
 
 ![Boot](assets/oled/oled_sc00_boot.jpg)
 
+
+## תיקון Audio Route ב-1.0.4
+
+החבילה הזו כוללת תיקון התאוששות אוטומטית לאודיו אחרי שימוש באתרי בדיקה כמו DualSense Tester. אם האתר פותח את הזרמת האודיו ואז נסגר או מפסיק לשלוח packets, הקושחה מחזירה את מסלול האודיו לבד בלי צורך לחבר/לנתק אוזניות.
+
 ## קבצים חשובים
 - `DS5Dongle-by-Ohad-1.0.4.uf2` - נוצר ב-GitHub Actions לאחר build.
 - `USER_MANUAL.pdf` - מדריך שימוש מלא.

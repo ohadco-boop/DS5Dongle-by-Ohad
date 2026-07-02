@@ -69,6 +69,99 @@ static volatile uint64_t g_mic_route_rearm_until_us = 0;
 // just re-stamps the current fallback route (headset on plug, speaker on
 // unplug) into SetStateData.
 static volatile uint64_t g_jack_route_refresh_until_us = 0;
+
+// 1.0.4 AudioRouteFix:
+// TinyUSB's SET_INTERFACE tells us when the host opens/closes the UAC speaker
+// stream, but browsers/test pages can leave the DS5 AudioControl route cached
+// after they stop producing audio. A physical jack change used to be the only
+// thing that reset that route. Track real USB speaker packet flow and, when the
+// stream closes or goes packet-idle, drop stale host AudioControl and push the
+// normal physical-jack fallback route back to the controller.
+static volatile uint32_t g_usb_speaker_if_change_us = 0;
+static volatile uint32_t g_usb_speaker_last_packet_us = 0;
+static volatile bool     g_usb_speaker_idle_recovered = false;
+static volatile bool     g_usb_mic_if_active = false;
+static constexpr uint32_t USB_SPK_START_GRACE_US = 1200000u;
+static constexpr uint32_t USB_SPK_IDLE_US        = 900000u;
+
+static void audio_force_route_refresh_ms(uint32_t ms) {
+    const uint64_t until = time_us_64() + (uint64_t)ms * 1000ULL;
+    if ((int64_t)(until - g_jack_route_refresh_until_us) > 0) {
+        g_jack_route_refresh_until_us = until;
+    }
+}
+
+void audio_usb_speaker_interface_changed(bool active) {
+    const uint32_t now = time_us_32();
+    g_usb_speaker_if_change_us = now;
+    g_usb_speaker_last_packet_us = 0;
+    g_usb_speaker_idle_recovered = false;
+
+    if (!active) {
+        // Host closed the UAC speaker stream (for example after closing
+        // DualSense Tester). Its last WebHID AudioControl may otherwise keep
+        // the DS5 stuck on the tester-selected route until a jack hotplug.
+        state_clear_host_audio_route();
+        audio_force_route_refresh_ms(1500);
+    } else {
+        // Give a newly-opened stream a short route refresh window too. This
+        // helps the occasional cold-start case where the DS5 did not receive a
+        // clean initial route before audio begins.
+        audio_force_route_refresh_ms(1000);
+    }
+}
+
+void audio_usb_microphone_interface_changed(bool active) {
+    g_usb_mic_if_active = active;
+}
+
+static bool audio_speaker_effectively_active() {
+    if (!spk_active) return false;
+    const uint32_t now = time_us_32();
+    const uint32_t last = g_usb_speaker_last_packet_us;
+    if (last != 0) {
+        return (uint32_t)(now - last) < USB_SPK_IDLE_US;
+    }
+    // Treat a freshly-opened interface as active briefly, before the first
+    // packet arrives, so AudioKeep/config-save logic does not race startup.
+    const uint32_t opened = g_usb_speaker_if_change_us;
+    return opened != 0 && (uint32_t)(now - opened) < USB_SPK_START_GRACE_US;
+}
+
+static bool audio_microphone_effectively_active() {
+    // USB microphone is an IN stream, so there is no host OUT packet cadence to
+    // observe. If the host selected the mic alternate setting, treat it as
+    // active until TinyUSB reports it closed.
+    return usb_mic_stream_active || g_usb_mic_if_active;
+}
+
+static void audio_route_recovery_service() {
+    if (controller_poweroff_is_pending()) return;
+    if (!bt_is_connected()) return;
+    if (!spk_active) return;
+
+    const uint32_t now = time_us_32();
+    const uint32_t last = g_usb_speaker_last_packet_us;
+    const uint32_t opened = g_usb_speaker_if_change_us;
+    bool packet_idle = false;
+
+    if (last != 0) {
+        packet_idle = (uint32_t)(now - last) >= USB_SPK_IDLE_US;
+    } else if (opened != 0) {
+        packet_idle = (uint32_t)(now - opened) >= USB_SPK_START_GRACE_US;
+    }
+
+    if (packet_idle && !g_usb_speaker_idle_recovered) {
+        // No more USB speaker packets while the interface is still marked open:
+        // recover exactly like a jack route refresh, without adding diagnostics
+        // or a user-visible workaround.
+        state_clear_host_audio_route();
+        audio_force_route_refresh_ms(1500);
+        g_usb_speaker_idle_recovered = true;
+    } else if (!packet_idle) {
+        g_usb_speaker_idle_recovered = false;
+    }
+}
 alignas(8) static uint32_t audio_core1_stack[8192];
 queue_t audio_fifo;
 static uint8_t opus_buf[200];
@@ -160,7 +253,7 @@ uint32_t opus_fifo_drops() { return 0; }
 static volatile uint32_t g_usb_frames = 0;
 static volatile uint32_t g_bt_packets = 0;
 uint32_t audio_usb_frames() { return g_usb_frames; }
-bool audio_usb_active() { return spk_active || usb_mic_stream_active; }
+bool audio_usb_active() { return audio_speaker_effectively_active() || audio_microphone_effectively_active(); }
 uint32_t audio_bt_packets() { return g_bt_packets; }
 
 // Rolling-peak meters for the OLED VU screen. Updated during audio_loop's
@@ -289,6 +382,7 @@ void __not_in_flash_func(audio_loop)() {
     // during the 250 ms shutdown window.
     if (controller_poweroff_is_pending()) return;
 
+    audio_route_recovery_service();
     jack_route_refresh_keepalive();
 
     // Mic-in path: pull one Opus packet from the BT-side FIFO, decode to
@@ -386,6 +480,8 @@ void __not_in_flash_func(audio_loop)() {
         return;
     }
     g_usb_frames += (uint32_t)frames;
+    g_usb_speaker_last_packet_us = time_us_32();
+    g_usb_speaker_idle_recovered = false;
 
     static float audio_buf[512 * 2];
     static uint audio_buf_pos = 0;

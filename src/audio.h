@@ -26,7 +26,14 @@ uint8_t  audio_peak_haptic();    // 0..255, decays on read
 
 // Byte-flow counters for the Diagnostics screen + web emulator.
 uint32_t audio_usb_frames();
-bool audio_usb_active();       // true while USB speaker or mic audio interface is streaming
+bool audio_usb_active();       // true while USB speaker or mic audio interface is effectively active
+
+// USB Audio route recovery hooks. Called from TinyUSB SET_INTERFACE callbacks
+// when the host opens/closes the speaker or microphone streaming interfaces.
+// These are intentionally state-machine hooks, not diagnostics.
+void audio_usb_speaker_interface_changed(bool active);
+void audio_usb_microphone_interface_changed(bool active);
+
 uint32_t audio_bt_packets();
 uint32_t audio_mic_frames();   // count of mic Opus frames decoded + written
 int32_t  audio_mic_last_decoded(); // last opus_decode return — neg = error, 480 = OK

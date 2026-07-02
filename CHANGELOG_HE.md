@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## v1.0.4 - Audio Route Fix
+- נוסף תיקון התאוששות אוטומטית למסלול USB Audio כשדפדפן או אתר בדיקה מפסיקים את הזרמת האודיו בלי אירוע חיבור/ניתוק אוזניות.
+- מתקן מצב שבו DualSense Tester יכול להשאיר את האודיו תקוע עד חיבור/ניתוק אוזניות.
+- מנקה מצב host audio route מיושן אחרי שהסטרים נעצר או שממשק ה-USB Audio חוזר למצב idle.
+- AudioKeep ושמירת Flash מושהית משתמשים עכשיו בפעילות אודיו אמיתית ועדכנית, ולא במצב USB Audio שנתקע.
+- Output reports כבר לא מתערבבים עם מצב אודיו מיושן אחרי סטרים תקוע מדפדפן/טסטר.
+
+## v1.0.4 - Stable AudioFix
+- תוקן רצף AudioKeep + שמירה + כיבוי.
+- הקושחה שולחת לשלט מצב audio-safe mute/off לפני כתיבה כפויה ל-Flash.
+- נוסף עיכוב קצר לפני שמירה/ניתוק כדי למנוע אודיו שבור בחיבור הבא.
+- מנקה cached host audio route אחרי ניתוק מקומי כדי שהחיבור הבא יתחיל נקי.
+
 ## v1.0.4 - Stable
 - עודכן מספר הגרסה ל-1.0.4 בכל מקומות הבנייה וה-OLED fallback.
 - שם ה-UF2 דרך GitHub Actions: `DS5Dongle-by-Ohad-1.0.4.uf2`.
@@ -19,7 +32,3 @@
 
 ## v1.0.0
 - גרסת בסיס יציבה של DS5Dongle by Ohad עם OLED, Settings, REMAP, PowerCombo, Audio, Diagnostics וסלוטים.
-
-## 1.0.4 Audio Hotfix
-- Fixed AudioKeep + save + poweroff sequence: sends an audio-safe mute/off state to the controller before any forced flash write, waits briefly, then saves/disconnects.
-- Clears cached host audio route after local disconnect so the next connection starts clean.

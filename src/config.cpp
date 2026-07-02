@@ -12,6 +12,7 @@
 #include "hardware/sync.h"
 #include "pico/cyw43_arch.h"
 #include "pico/time.h"
+#include "audio.h"
 
 constexpr uint32_t CONFIG_MAGIC = 0x66ccff00;
 constexpr uint16_t CONFIG_VERSION = 6;
@@ -19,17 +20,16 @@ constexpr uint32_t CONFIG_FLASH_OFFSET = PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SI
 static Config config{};
 bool is_dse = false;
 
-// fixed65am: Flash erase/program stalls XIP and can momentarily break active
-// USB audio/haptics. Defer normal config saves while the host has either
-// DualSense audio streaming interface open. Poweroff still forces a sync save.
-extern bool spk_active;
-extern volatile bool usb_mic_stream_active;
+// fixed65am/1.0.4 AudioRouteFix: Flash erase/program stalls XIP and can
+// momentarily break active USB audio/haptics. Defer normal config saves while
+// the host has real recent USB audio activity, not merely a stale alt setting
+// left behind by a browser/test page. Poweroff still forces a sync save.
 extern bool controller_poweroff_is_pending();
 static volatile bool g_config_save_deferred = false;
 static uint32_t g_config_audio_quiet_since_us = 0;
 
 static bool config_flash_audio_busy() {
-    return spk_active || usb_mic_stream_active;
+    return audio_usb_active();
 }
 
 static bool config_flash_audio_quiet_for(uint32_t quiet_us) {

@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v1.0.4 - Audio Route Fix
+- Added automatic USB Audio route recovery when a browser or tester page stops the audio stream without a headset plug/unplug event.
+- Fixes cases where DualSense Tester could leave audio stuck until reconnecting headphones.
+- Clears stale host audio route state after the stream stops or the USB Audio interface returns to idle.
+- AudioKeep and deferred Flash save now use recent effective audio activity instead of stale USB audio state.
+- Output reports are no longer treated as missing speaker audio packets after a stale browser/tester stream.
+
 ## v1.0.4 - Stable AudioFix
 - Fixed the AudioKeep + save + poweroff sequence.
 - The firmware now sends an audio-safe mute/off state to the controller before any forced Flash write.
