@@ -496,6 +496,18 @@ void draw_no_controller(int x, int y) {
     else draw_text(x, y, "(no controller)");
 }
 
+const char* oled_status_he(const char *s) {
+    if (!s || !s[0]) return "";
+    if (strcmp(s, "Saved!") == 0) return "נשמר";
+    if (strcmp(s, "Save pending") == 0) return "ממתין";
+    if (strcmp(s, "Save FAIL") == 0) return "שגיאה";
+    if (strcmp(s, "Reset pending") == 0) return "ממתין";
+    if (strcmp(s, "Reset!") == 0) return "אופס";
+    if (strcmp(s, "Reset FAIL") == 0) return "שגיאה";
+    if (strcmp(s, "Slots wiped!") == 0) return "נמחק";
+    return "";
+}
+
 // Button-chrome strip on the left edge of every screen. KEY0 (top button)
 // shows '>' at y=8; KEY1 (bottom button) shows '<' at y=49. Painted by
 // flush_fb() on top of the rendered framebuffer so it never gets clobbered.
@@ -984,8 +996,9 @@ __attribute__((noinline)) void render_screen() {
         if (b8 & 0x02) rect_filled(80, 30, 12, 3); else rect_outline(80, 30, 12, 3); // R1
     } else {
         if (ui_hebrew()) {
-            draw_hebrew_r(126, 14, "צימוד שלט");
-            draw_hebrew_r(126, 26, "לחץ יצירה ופיאס");
+            draw_hebrew_r(126, 14, "לצימוד שלט חדש");
+            draw_text(36, 26, "Create + PS");
+            draw_hebrew_r(126, 26, "לחץ");
             draw_hebrew_r(126, 38, "המתן להבהוב כחול");
         } else {
             draw_text(kContentX, 14, "Pair your DualSense:");
@@ -1492,8 +1505,13 @@ void lightbar_handle_input() {
 __attribute__((noinline)) void render_screen_lightbar() {
     lightbar_handle_input();
     fb_clear();
-    draw_title("Lightbar", "תאורה");
-    draw_text(86, 0, lb_mode_tag(lb_mode));
+    if (ui_hebrew()) {
+        draw_hebrew_r(126, 0, "תאורה");
+        draw_text(kContentX, 0, lb_mode_tag(lb_mode));
+    } else {
+        draw_title("Lightbar", "תאורה");
+        draw_text(86, 0, lb_mode_tag(lb_mode));
+    }
 
     if (bt_is_connected()) {
         // lb_r/lb_g/lb_b are computed every frame by lightbar_service() (which
@@ -1521,7 +1539,12 @@ __attribute__((noinline)) void render_screen_lightbar() {
     } else {
         draw_no_controller(kContentX, 30);
     }
-    if (ui_hebrew()) draw_hebrew_r(126, 56, "כפתור עליון מצב"); else draw_text(kContentX, 56, "R1=mode");
+    if (ui_hebrew()) {
+        draw_hebrew_r(126, 56, "שינוי מצב עם");
+        draw_text(kContentX, 56, "R1");
+    } else {
+        draw_text(kContentX, 56, "R1=mode");
+    }
     flush_fb();
 }
 
@@ -1803,9 +1826,13 @@ __attribute__((noinline)) void render_screen_remap() {
     fb_clear();
     char buf[24];
     snprintf(buf, sizeof(buf), "Remap %s", remap_dirty ? "(*)" : "   ");
-    if (ui_hebrew()) draw_hebrew_r(126, 0, remap_dirty ? "מיפוי כוכב" : "מיפוי");
-    else draw_text(kContentX, 0, buf);
-    if (remap_save_status[0]) draw_text(86, 0, remap_save_status);
+    if (ui_hebrew()) {
+        const char *st = oled_status_he(remap_save_status);
+        draw_hebrew_r(126, 0, st[0] ? st : (remap_dirty ? "מיפוי כוכב" : "מיפוי"));
+    } else {
+        draw_text(kContentX, 0, buf);
+        if (remap_save_status[0]) draw_text(86, 0, remap_save_status);
+    }
 
     constexpr int kVisible = 5;
     int top = 0;
@@ -2183,8 +2210,8 @@ __attribute__((noinline)) void render_screen_settings() {
     if (settings_sel >= kVisible) top = settings_sel - kVisible + 1;
 
     if (ui_hebrew()) {
-        draw_hebrew_r(126, 0, settings_dirty ? "הגדרות כוכב" : "הגדרות");
-        if (settings_save_status[0]) draw_text(kContentX, 0, settings_save_status);
+        const char *st = oled_status_he(settings_save_status);
+        draw_hebrew_r(126, 0, st[0] ? st : (settings_dirty ? "הגדרות כוכב" : "הגדרות"));
         for (int i = 0; i < kVisible && top + i < kNumSettingsItems; i++) {
             draw_settings_item_he(top + i, 9 + i * 9);
         }

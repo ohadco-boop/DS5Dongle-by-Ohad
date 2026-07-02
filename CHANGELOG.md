@@ -5,7 +5,9 @@
 - Added optional Hebrew OLED UI language.
 - Added `Settings -> Language` with English/Hebrew toggle.
 - Added a compact Hebrew bitmap font for the 128x64 OLED.
-- Localized main OLED screen titles, Settings labels, Remap title/footer, pairing hints and status messages.
+- Localized main OLED screen titles, Settings labels, Remap title/footer, pairing hints and save/status messages.
+- Refined Hebrew pairing instructions: `Create + PS` is kept readable in English while the surrounding instructions are Hebrew.
+- Fixed Hebrew Lightbar header overlap between `[BATT]` and `תאורה`, and changed the footer hint to `שינוי מצב עם R1`.
 - Default language remains English for existing users.
 - Based on 1.0.4 Stable + AudioRouteFix + PoweroffTouchpadWdtFix.
 
