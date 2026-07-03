@@ -1756,36 +1756,34 @@ __attribute__((noinline)) void render_screen_vu() {
 
 const char* const kHelpLinesEn[] = {
     "KEY0/KEY1: screens",
-    "Options+DPad L/R",
-    "screens by gamepad",
-    "DPad Up/Down: menu",
+    "Opt+DPad L/R:",
+    "  screens from pad",
+    "DPad U/D: menu",
     "DPad L/R: change",
     "!SAVE",
     "PS+Options: poweroff",
-    "AudioKeep",
-    "keeps Idle off",
-    "while audio plays",
-    "Pair controller:",
-    "hold Create+PS",
-    "wait blue flashing",
+    "AudioKeep: no Idle",
+    "  while audio plays",
+    "Create+PS: pair pad",
+    "  wait blue flash",
 };
 
 const char* const kHelpLinesHe[] = {
-    "@KEY0 / KEY1",
+    "@KEY0 / KEY1:",
     "מעבר מסכים",
-    "@Options + D-Pad",
-    "ימין/שמאל מסכים",
-    "@D-Pad Up/Down",
-    "גלילה בתפריטים",
-    "@D-Pad Left/Right",
+    "@Options + D-Pad:",
+    "מעבר עם השלט",
+    "@D-Pad Up/Down:",
+    "גלילה בתפריט",
+    "@D-Pad Left/Right:",
     "שינוי ערך",
     "!SAVE",
-    "@PS + Options",
+    "@PS + Options:",
     "כיבוי שלט",
-    "אודיו מעיר",
+    "אודיו מעיר:",
     "לא מכבה ב-Idle",
     "כשיש אודיו",
-    "@Create + PS",
+    "@Create + PS:",
     "צימוד שלט חדש",
     "המתן להבהוב כחול",
 };
@@ -1831,7 +1829,7 @@ void help_handle_input() {
 void draw_help_line_en(const char *line, int y) {
     if (strcmp(line, "!SAVE") == 0) {
         draw_tri_icon(kContentX, y + 1);
-        draw_text(kContentX + 10, y, "=save");
+        draw_text(kContentX + 10, y, ": save");
         return;
     }
     draw_text(kContentX, y, line);
@@ -1839,8 +1837,10 @@ void draw_help_line_en(const char *line, int y) {
 
 void draw_help_line_he(const char *line, int y) {
     if (strcmp(line, "!SAVE") == 0) {
+        // Triangle is the setting, the colon separates it from the explanation.
+        draw_tri_icon(78, y + 1);
+        draw_text(88, y, ":");
         draw_hebrew_r(126, y, "שמירה");
-        draw_tri_icon(84, y + 1);
         return;
     }
     if (line[0] == '@') {
@@ -1855,7 +1855,6 @@ __attribute__((noinline)) void render_screen_help() {
     help_clamp_scroll();
 
     fb_clear();
-    draw_title("Help", "עזרה");
 
     constexpr int kVisible = 5;
     const int count = help_line_count();
@@ -1863,7 +1862,17 @@ __attribute__((noinline)) void render_screen_help() {
     const int pages = (count > kVisible) ? (count - kVisible + 1) : 1;
     char pg[10];
     snprintf(pg, sizeof(pg), "%d/%d", page, pages);
-    draw_text(kContentX, 0, pg);
+
+    // Keep the page counter away from the Help title.  In English the old
+    // counter at x=0 overlapped the word "Help" on the top line.
+    if (ui_hebrew()) {
+        draw_title("Help", "עזרה");
+        draw_text(kContentX, 0, pg);
+    } else {
+        draw_title("Help", "עזרה");
+        const int pg_x = 128 - (int)strlen(pg) * 6;
+        draw_text(pg_x > 0 ? pg_x : 0, 0, pg);
+    }
 
     for (int i = 0; i < kVisible; ++i) {
         const int idx = help_scroll + i;
