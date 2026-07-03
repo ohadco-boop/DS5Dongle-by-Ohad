@@ -1,5 +1,10 @@
 # CHANGELOG
 
+### 1.0.5 PersistentSettings patch
+- Fixed config migration so firmware upgrades preserve existing OLED Settings instead of falling back to defaults when the schema version changes.
+- New config fields are initialized safely, while existing user values are kept.
+
+
 ## 1.0.5 - Hebrew OLED UI
 
 - Added optional Hebrew OLED UI language.
@@ -8,6 +13,8 @@
 - Localized main OLED screen titles, Settings labels, Remap title/footer, pairing hints and save/status messages.
 - Refined Hebrew pairing instructions: `Create + PS` is kept readable in English while the surrounding instructions are Hebrew.
 - Fixed Hebrew Lightbar header overlap between `[BATT]` and `תאורה`, and changed the footer hint to `שינוי מצב עם R1`.
+- Restored fast watchdog recovery: global timeout is now 1.2 s, while planned power-off paths still feed the watchdog explicitly.
+- Shortened the watchdog reboot LED indication so accidental watchdog resets recover faster.
 - Default language remains English for existing users.
 - Based on 1.0.4 Stable + AudioRouteFix + PoweroffTouchpadWdtFix.
 

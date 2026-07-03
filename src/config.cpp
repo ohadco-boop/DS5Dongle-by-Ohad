@@ -184,31 +184,45 @@ void config_valid() {
         printf("[Config] ui_language invalid, defaulting to English\n");
     }
     if (body->config_version != CONFIG_VERSION) {
-        if (previous_body_config_version == 6) {
-            // DS5Dongle by Ohad 1.0.5: add optional Hebrew OLED UI while
-            // preserving every existing 1.0.4 user setting.
-            body->ui_language = 0;
+        // DS5Dongle by Ohad 1.0.5 PersistentSettings:
+        // Firmware updates must not wipe the user's OLED Settings every time the
+        // config schema number changes. Preserve every valid field already read
+        // from flash and only initialize fields that were added in newer schemas.
+        // A fully-erased sector still has config_version=0xFF and is treated as
+        // first boot / factory defaults.
+        const bool erased_or_unusable_version =
+            (previous_body_config_version == 0x00 || previous_body_config_version == 0xFF);
+
+        if (!erased_or_unusable_version) {
+            if (previous_body_config_version <= 4) {
+                // DS5Dongle by Ohad 1.0.0 Stable:
+                // Re-reference Mic Gain so old -20 dB becomes new 0 dB.
+                const int old_db = (int)body->mic_gain_db_plus24 - 24;
+                int new_ref_db = old_db + 20;
+                if (new_ref_db < -24) new_ref_db = -24;
+                if (new_ref_db > 12)  new_ref_db = 12;
+                body->mic_gain_db_plus24 = (uint8_t)(new_ref_db + 24);
+                printf("[Config] Migrated mic gain reference: old %d dB -> new %+d dB\n", old_db, new_ref_db);
+            }
+            if (previous_body_config_version <= 5) {
+                // DS5Dongle by Ohad 1.0.4: new AudioKeep setting. Existing
+                // users get the Ohad default without changing other settings.
+                body->keep_awake_on_audio = 1;
+                printf("[Config] Migrated AudioKeep default ON\n");
+            }
+            if (previous_body_config_version <= 6) {
+                // DS5Dongle by Ohad 1.0.5: new Language setting. Keep English
+                // as the safe default for upgrades.
+                body->ui_language = 0;
+                printf("[Config] Migrated UI language default English\n");
+            }
+
             body->config_version = CONFIG_VERSION;
-            printf("[Config] Migrated to 1.0.5: UI language default English\n");
-        } else if (previous_body_config_version == 5) {
-            // DS5Dongle by Ohad 1.0.4: add AudioKeep ON while preserving the
-            // user's existing 1.0.0 settings.
-            body->keep_awake_on_audio = 1;
-            body->config_version = CONFIG_VERSION;
-            printf("[Config] Migrated to 1.0.4: AudioKeep default ON\n");
-        } else if (previous_body_config_version == 4) {
-            // DS5Dongle by Ohad 1.0.0 Stable:
-            // Re-reference Mic Gain so old -20 dB becomes new 0 dB.
-            const int old_db = (int)body->mic_gain_db_plus24 - 24;
-            int new_ref_db = old_db + 20;
-            if (new_ref_db < -24) new_ref_db = -24;
-            if (new_ref_db > 12)  new_ref_db = 12;
-            body->mic_gain_db_plus24 = (uint8_t)(new_ref_db + 24);
-            body->config_version = CONFIG_VERSION;
-            printf("[Config] Migrated mic gain reference: old %d dB -> new %+d dB\n", old_db, new_ref_db);
+            printf("[Config] Preserved user settings while migrating schema %u -> %u\n",
+                   previous_body_config_version, CONFIG_VERSION);
         } else {
             body->config_version = CONFIG_VERSION;
-            // DS5Dongle by Ohad 1.0.5 Stable defaults.
+            // DS5Dongle by Ohad 1.0.5 Stable first-boot/factory defaults.
             body->polling_rate_mode = 2;
             body->lightbar_mode = 9;              // BATT
             body->auto_haptics_enable = 0;        // Haptics/AutoHap Off
@@ -220,7 +234,8 @@ void config_valid() {
             body->screen_brightness = 5;          // OLED Bright 50%
             body->inactive_time = 5;              // fixed65u idle menu default: 5 min
             body->keep_awake_on_audio = 1;        // AudioKeep On
-            printf("[Config] Warning: config version changed, applying DS5Dongle by Ohad 1.0.5 Stable defaults\n");
+            body->ui_language = 0;                // English
+            printf("[Config] First boot / erased config, applying DS5Dongle by Ohad 1.0.5 Stable defaults\n");
         }
     }
 }

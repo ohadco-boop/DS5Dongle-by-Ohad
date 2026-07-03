@@ -738,15 +738,13 @@ int main() {
 #if !ENABLE_SERIAL
     if (watchdog_caused_reboot()) {
         printf("Rebooted by Watchdog!\n");
-        // 当崩溃重启以后，闪三下灯
+        // DS5Dongle 1.0.5 FastWatchdog:
+        // keep the watchdog indication short so recovery feels immediate.
         for (int i = 0; i < 6; i++) {
-            if (i % 2 == 0) {
-                cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, true);
-            } else {
-                cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, false);
-            }
-            sleep_ms(500);
+            cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, (i % 2) == 0);
+            sleep_ms(90);
         }
+        cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, false);
     } else {
         printf("Clean boot\n");
     }
@@ -766,12 +764,10 @@ int main() {
     oled_init();
 
 #if !ENABLE_SERIAL
-    // DS5Dongle 1.0.4 PoweroffWatchdogFix:
-    // 1 s was too aggressive during intentional BT teardown after long sessions
-    // and could reboot the Pico even though nothing had crashed. 3 s still
-    // recovers real hangs quickly, but avoids false watchdog resets on clean
-    // controller power-off.
-    watchdog_enable(3000, true);
+    // DS5Dongle 1.0.5 FastWatchdog:
+    // Keep the watchdog recovery fast. The power-off path feeds the watchdog
+    // explicitly, so we do not need a long global timeout anymore.
+    watchdog_enable(1200, true);
 #endif
 
     while (1) {
