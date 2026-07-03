@@ -89,3 +89,7 @@ Adds an optional Hebrew OLED user interface. The default language remains Englis
 
 ### OLED polish note
 The 1.0.5 OLED UI uses button symbols in the Remap screen where possible, in both English and Hebrew UI modes.
+
+## Persistent settings note
+
+Version 1.0.5 now stores OLED Settings in a safe app-owned flash sector instead of the last BTstack NVM sector. Remap already used a safe sector, which is why Remap could survive firmware flashing while other Settings reset.

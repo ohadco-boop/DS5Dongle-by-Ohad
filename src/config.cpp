@@ -16,11 +16,14 @@
 
 constexpr uint32_t CONFIG_MAGIC = 0x66ccff00;
 constexpr uint16_t CONFIG_VERSION = 7;
-#ifndef DS5_PHYSICAL_FLASH_SIZE_BYTES
-#define DS5_PHYSICAL_FLASH_SIZE_BYTES PICO_FLASH_SIZE_BYTES
-#endif
-constexpr uint32_t DS5_PHYSICAL_FLASH_BYTES = (uint32_t)DS5_PHYSICAL_FLASH_SIZE_BYTES;
-constexpr uint32_t CONFIG_FLASH_OFFSET = DS5_PHYSICAL_FLASH_BYTES - FLASH_SECTOR_SIZE;
+// Persistent app data must not live in the last two flash sectors: BTstack
+// uses them as its NVM/link-key flash banks on Pico/Pico W ports. The old
+// Ohad builds stored Config in the very last sector, which explains why
+// Remap (-3) survived firmware updates but Settings (-1) could reset.
+// New layout: Remap=-3, Config=-4, Slots=-5. Legacy Config (-1) is read
+// once for migration if it is still valid, but is never erased/programmed.
+constexpr uint32_t CONFIG_FLASH_OFFSET = PICO_FLASH_SIZE_BYTES - 4u * FLASH_SECTOR_SIZE;
+constexpr uint32_t LEGACY_CONFIG_FLASH_OFFSET = PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE;
 static Config config{};
 bool is_dse = false;
 
@@ -31,6 +34,7 @@ bool is_dse = false;
 extern bool controller_poweroff_is_pending();
 static volatile bool g_config_save_deferred = false;
 static uint32_t g_config_audio_quiet_since_us = 0;
+static bool config_write_flash_now();
 
 static bool config_flash_audio_busy() {
     return audio_usb_active();
@@ -54,13 +58,31 @@ static bool config_flash_audio_quiet_for(uint32_t quiet_us) {
 static_assert(sizeof(Config) <= FLASH_PAGE_SIZE);
 // 配置区起始地址必须按 flash sector 对齐。
 static_assert(CONFIG_FLASH_OFFSET % FLASH_SECTOR_SIZE == 0);
+static_assert(LEGACY_CONFIG_FLASH_OFFSET % FLASH_SECTOR_SIZE == 0);
 
 uint32_t calc_config_crc(const Config &con) {
     return crc32(reinterpret_cast<const uint8_t *>(&con.body), sizeof(Config_body));
 }
 
+static uint32_t calc_config_crc_len(const Config &con, uint16_t len) {
+    if (len > sizeof(Config_body)) len = sizeof(Config_body);
+    return crc32(reinterpret_cast<const uint8_t *>(&con.body), len);
+}
+
 const Config *flash_config() {
     return reinterpret_cast<const Config *>(XIP_BASE + CONFIG_FLASH_OFFSET);
+}
+
+static const Config *legacy_flash_config() {
+    return reinterpret_cast<const Config *>(XIP_BASE + LEGACY_CONFIG_FLASH_OFFSET);
+}
+
+static bool config_record_looks_valid(const Config &candidate) {
+    if (candidate.magic != CONFIG_MAGIC) return false;
+    if (candidate.size == 0 || candidate.size > sizeof(Config_body)) return false;
+    // Accept both current and older schema versions. Older builds stored a
+    // shorter Config_body and calculated CRC only over that saved length.
+    return calc_config_crc_len(candidate, candidate.size) == candidate.crc32;
 }
 
 void config_valid() {
@@ -245,8 +267,30 @@ void config_valid() {
 }
 
 void config_load() {
-    memcpy(&config, flash_config(), sizeof(Config));
+    Config primary{};
+    memcpy(&primary, flash_config(), sizeof(Config));
 
+    if (config_record_looks_valid(primary)) {
+        config = primary;
+        config_valid();
+        return;
+    }
+
+    // One-time migration from old builds that stored Config in BTstack's last
+    // flash bank. Do not erase/program the legacy sector; BTstack owns it.
+    Config legacy{};
+    memcpy(&legacy, legacy_flash_config(), sizeof(Config));
+    if (config_record_looks_valid(legacy)) {
+        printf("[Config] Migrating Settings from legacy BTstack-overlap sector to safe app sector\n");
+        config = legacy;
+        config_valid();
+        config_write_flash_now();
+        return;
+    }
+
+    // New sector is empty/invalid and legacy sector has no usable config.
+    // Treat as first boot/factory defaults.
+    config = primary;
     config_valid();
 }
 

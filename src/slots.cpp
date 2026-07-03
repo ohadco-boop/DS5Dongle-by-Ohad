@@ -10,11 +10,10 @@
 #include "hardware/sync.h"
 
 constexpr uint32_t SLOTS_MAGIC = 0x44533502u;  // "DS5\x02"
-#ifndef DS5_PHYSICAL_FLASH_SIZE_BYTES
-#define DS5_PHYSICAL_FLASH_SIZE_BYTES PICO_FLASH_SIZE_BYTES
-#endif
-constexpr uint32_t DS5_PHYSICAL_FLASH_BYTES = (uint32_t)DS5_PHYSICAL_FLASH_SIZE_BYTES;
-constexpr uint32_t SLOTS_FLASH_OFFSET = DS5_PHYSICAL_FLASH_BYTES - 2u * FLASH_SECTOR_SIZE;
+// Keep app-owned slot data out of BTstack's last two flash banks.
+// Legacy builds stored Slots at -2, which overlaps BTstack NVM.
+constexpr uint32_t SLOTS_FLASH_OFFSET = PICO_FLASH_SIZE_BYTES - 5u * FLASH_SECTOR_SIZE;
+constexpr uint32_t LEGACY_SLOTS_FLASH_OFFSET = PICO_FLASH_SIZE_BYTES - 2u * FLASH_SECTOR_SIZE;
 
 struct __attribute__((packed)) SlotsData {
     uint32_t magic;
@@ -24,11 +23,24 @@ struct __attribute__((packed)) SlotsData {
 
 static_assert(sizeof(SlotsData) <= FLASH_PAGE_SIZE);
 static_assert(SLOTS_FLASH_OFFSET % FLASH_SECTOR_SIZE == 0);
+static_assert(LEGACY_SLOTS_FLASH_OFFSET % FLASH_SECTOR_SIZE == 0);
 
 static SlotsData g_slots{};
 
 static const SlotsData *flash_slots() {
     return reinterpret_cast<const SlotsData *>(XIP_BASE + SLOTS_FLASH_OFFSET);
+}
+
+static const SlotsData *legacy_flash_slots() {
+    return reinterpret_cast<const SlotsData *>(XIP_BASE + LEGACY_SLOTS_FLASH_OFFSET);
+}
+
+static bool slots_valid(const SlotsData &data) {
+    if (data.magic != SLOTS_MAGIC) return false;
+    for (int i = 0; i < kNumSlots; i++) {
+        if (data.occupied[i] > 1) return false;
+    }
+    return true;
 }
 
 static bool save_slots_to_flash() {
@@ -53,11 +65,19 @@ static bool save_slots_to_flash() {
 
 void slots_load() {
     memcpy(&g_slots, flash_slots(), sizeof(g_slots));
-    if (g_slots.magic != SLOTS_MAGIC) {
-        printf("[Slots] flash sector empty/invalid, initializing\n");
-        memset(&g_slots, 0, sizeof(g_slots));
-        g_slots.magic = SLOTS_MAGIC;
-        save_slots_to_flash();
+    if (!slots_valid(g_slots)) {
+        SlotsData legacy{};
+        memcpy(&legacy, legacy_flash_slots(), sizeof(legacy));
+        if (slots_valid(legacy)) {
+            printf("[Slots] migrating from legacy BTstack-overlap sector to safe app sector\n");
+            g_slots = legacy;
+            save_slots_to_flash();
+        } else {
+            printf("[Slots] flash sector empty/invalid, initializing\n");
+            memset(&g_slots, 0, sizeof(g_slots));
+            g_slots.magic = SLOTS_MAGIC;
+            save_slots_to_flash();
+        }
     }
     for (int i = 0; i < kNumSlots; i++) {
         if (g_slots.occupied[i]) {

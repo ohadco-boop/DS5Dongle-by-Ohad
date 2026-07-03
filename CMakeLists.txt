@@ -66,16 +66,6 @@ else ()
         # 0.7.2 RAM-audio hotfix: run Pico 2 W at stock-ish 150MHz instead of the OLED fork's 320MHz overclock.
         set(CYW43_PIO_CLOCK_DIV_VALUE 2)
         set(SYS_CLOCK_KHZ_VALUE 150000)
-
-        # DS5Dongle by Ohad 1.0.5 persistence fix:
-        # keep the last 64 KiB of the Pico 2 W physical flash outside the UF2
-        # application image so BOOTSEL re-flashing the same firmware will not
-        # overwrite user settings, pairing slots, or remap data. Runtime code
-        # still addresses the real 4 MiB flash top via DS5_PHYSICAL_FLASH_SIZE_BYTES.
-        math(EXPR DS5_PERSISTENT_RESERVED_BYTES "64 * 1024")
-        math(EXPR DS5_PICO2W_PHYSICAL_FLASH_BYTES "4 * 1024 * 1024")
-        math(EXPR DS5_PICO2W_APP_FLASH_BYTES "${DS5_PICO2W_PHYSICAL_FLASH_BYTES} - ${DS5_PERSISTENT_RESERVED_BYTES}")
-        set(PICO_FLASH_SIZE_BYTES ${DS5_PICO2W_APP_FLASH_BYTES} CACHE STRING "Pico 2 W app flash size with DS5 persistent settings reserve" FORCE)
 endif ()
 
 
@@ -104,14 +94,6 @@ add_executable(ds5-bridge
         src/slots.cpp
         src/remap.cpp
 )
-
-if (PICO_W_BUILD)
-        target_compile_definitions(ds5-bridge PRIVATE DS5_PHYSICAL_FLASH_SIZE_BYTES=2097152u)
-else ()
-        # Physical Pico 2 W flash remains 4 MiB even though the linker/UF2 app
-        # image is limited to 4 MiB - 64 KiB above.
-        target_compile_definitions(ds5-bridge PRIVATE DS5_PHYSICAL_FLASH_SIZE_BYTES=4194304u DS5_PERSISTENT_RESERVED_BYTES=65536u)
-endif ()
 
 if (ENABLE_BATT_LED)
         target_sources(ds5-bridge PRIVATE src/battery_led.cpp)

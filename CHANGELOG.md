@@ -1,9 +1,17 @@
 # CHANGELOG
 
-### Persistence fix
-- Reserved the top 64 KiB of Pico 2 W flash outside the UF2 application image.
-- Settings, pairing slots, and remap data remain stored at the physical end of flash and should survive re-flashing the same firmware.
-- No forced flash write during active audio was added.
+### 1.0.5 Safe Flash Layout Fix v2
+- Reverted the broken FlashReserveFix approach that reduced `PICO_FLASH_SIZE_BYTES`; that could make Flash writes hang and trigger watchdog during Save.
+- Kept the safer layout-only approach: Settings move to `-4`, Slots move to `-5`, Remap remains at `-3`.
+- No forced Flash write during active audio.
+
+
+### 1.0.5 Persistent Flash Layout Fix
+- Moved OLED Settings storage out of BTstack's last flash banks. Settings now use a safe app-owned sector at `PICO_FLASH_SIZE_BYTES - 4 * FLASH_SECTOR_SIZE`.
+- Kept Remap storage at `-3` because it was already outside the BTstack banks and was not the source of the reset.
+- Moved Slots storage to `-5` to avoid the old `-2` BTstack overlap.
+- Added one-time migration from the old Settings/Slots sectors if valid data still exists there.
+- This fixes Settings resetting after flashing the same firmware again; if a previous flash already wiped the old Settings sector, set the options once more and future updates should preserve them.
 
 ### 1.0.5 Save status patch
 - Save confirmation popups (`Saved!` / `Save pending` / `Save FAIL`) now auto-clear after 2 seconds so the Settings/Remap title returns.
