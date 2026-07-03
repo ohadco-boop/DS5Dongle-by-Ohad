@@ -211,6 +211,7 @@ bool settings_init_done = false;
 uint8_t settings_last_dpad = 8;  // 8 = released
 uint8_t settings_last_face = 0;
 const char* settings_save_status = "";  // shown briefly after Triangle press
+uint32_t settings_save_status_until_us = 0;
 
 // OLED Remap screen state. This replaces the old hardcoded 3-button cycle
 // menu item. The table maps physical/source button -> reported/target button.
@@ -228,6 +229,30 @@ bool remap_dirty = false;
 uint8_t remap_last_dpad = 8;
 uint8_t remap_last_face = 0;
 const char* remap_save_status = "";
+uint32_t remap_save_status_until_us = 0;
+constexpr uint32_t kSaveStatusVisibleUs = 2000000u;
+
+void settings_set_save_status(const char* s) {
+    settings_save_status = s ? s : "";
+    settings_save_status_until_us = settings_save_status[0] ? ((uint32_t)time_us_32() + kSaveStatusVisibleUs) : 0;
+}
+
+void remap_set_save_status(const char* s) {
+    remap_save_status = s ? s : "";
+    remap_save_status_until_us = remap_save_status[0] ? ((uint32_t)time_us_32() + kSaveStatusVisibleUs) : 0;
+}
+
+void service_save_status_timeouts() {
+    const uint32_t now = (uint32_t)time_us_32();
+    if (settings_save_status[0] && settings_save_status_until_us && (int32_t)(now - settings_save_status_until_us) >= 0) {
+        settings_save_status = "";
+        settings_save_status_until_us = 0;
+    }
+    if (remap_save_status[0] && remap_save_status_until_us && (int32_t)(now - remap_save_status_until_us) >= 0) {
+        remap_save_status = "";
+        remap_save_status_until_us = 0;
+    }
+}
 
 // Factory-reset hold-Triangle-2s state. Borrowed from zurce/DS5Dongle-OLED's
 // "hold to wipe" UX pattern (https://github.com/zurce/DS5Dongle-OLED).
@@ -779,7 +804,7 @@ void handle_buttons() {
             b.screen_brightness = (uint8_t)bright_idx;
             set_config(b);
             const bool save_ok = config_save();
-            settings_save_status = save_ok ? (config_save_pending() ? "Save pending" : "Saved!") : "Save FAIL";
+            settings_set_save_status(save_ok ? (config_save_pending() ? "Save pending" : "Saved!") : "Save FAIL");
             settings_local.screen_brightness = (uint8_t)bright_idx;
         } else {
             current_screen = (current_screen - 1 + kNumScreens) % kNumScreens;
@@ -1715,7 +1740,7 @@ void remap_screen_load() {
     remap_config_local = get_config();
     remap_get(remap_local);
     remap_dirty = false;
-    remap_save_status = "";
+    remap_set_save_status("");
     remap_init_done = true;
 }
 
@@ -1788,7 +1813,7 @@ void remap_handle_input() {
     const bool tri_prev = (remap_last_face & 0x80) != 0;
     if (!tri_now && tri_prev) {
         if (remap_sel == kRemapResetIdx) remap_set_identity_local();
-        remap_save_status = remap_save_all() ? "Saved!" : "Save FAIL";
+        remap_set_save_status(remap_save_all() ? "Saved!" : "Save FAIL");
     }
     remap_last_face = face;
 }
@@ -1868,6 +1893,7 @@ static void draw_remap_item_direct(int idx, int y) {
 }
 
 __attribute__((noinline)) void render_screen_remap() {
+    service_save_status_timeouts();
     if (!remap_init_done) remap_screen_load();
     remap_handle_input();
 
@@ -2053,13 +2079,13 @@ void settings_handle_input() {
                 oled_flip180 = (settings_local.screen_rotation != 0);
                 lightbar_load_config(); // refresh RAM lightbar state (no reboot here)
                 settings_dirty = false;
-                settings_save_status = config_save_pending() ? "Reset pending" : "Reset!";
+                settings_set_save_status(config_save_pending() ? "Reset pending" : "Reset!");
             } else {
-                settings_save_status = "Reset FAIL";
+                settings_set_save_status("Reset FAIL");
             }
         } else {
             bt_wipe_all_slots();
-            settings_save_status = "Slots wiped!";
+            settings_set_save_status("Slots wiped!");
         }
     }
     if (!tri_now && tri_prev) {
@@ -2070,7 +2096,7 @@ void settings_handle_input() {
             bright_idx = get_config().screen_brightness;
             oled_flip180 = (get_config().screen_rotation != 0);
             const bool save_ok = config_save();
-            settings_save_status = save_ok ? (config_save_pending() ? "Save pending" : "Saved!") : "Save FAIL";
+            settings_set_save_status(save_ok ? (config_save_pending() ? "Save pending" : "Saved!") : "Save FAIL");
             if (save_ok) {
                 settings_dirty = false;
             }
@@ -2244,6 +2270,7 @@ void draw_settings_item_he(int idx, int y) {
 }
 
 __attribute__((noinline)) void render_screen_settings() {
+    service_save_status_timeouts();
     if (!settings_init_done) {
         settings_local = get_config();
         settings_init_done = true;
@@ -2420,10 +2447,10 @@ bool oled_save_pending_changes_for_poweroff_internal() {
         watchdog_update();
         if (config_save()) {
             settings_dirty = false;
-            settings_save_status = "Saved!";
+            settings_set_save_status("Saved!");
         } else {
             ok = false;
-            settings_save_status = "Save FAIL";
+            settings_set_save_status("Save FAIL");
         }
         watchdog_update();
         wrote = true;
@@ -2434,10 +2461,10 @@ bool oled_save_pending_changes_for_poweroff_internal() {
     if (remap_init_done && remap_dirty) {
         watchdog_update();
         if (remap_save_all()) {
-            remap_save_status = "Saved!";
+            remap_set_save_status("Saved!");
         } else {
             ok = false;
-            remap_save_status = "Save FAIL";
+            remap_set_save_status("Save FAIL");
         }
         watchdog_update();
         wrote = true;
@@ -2462,10 +2489,10 @@ bool oled_save_pending_changes_for_poweroff_internal() {
     if (config_save_pending()) {
         watchdog_update();
         if (config_flush_deferred_save_now()) {
-            settings_save_status = "Saved!";
+            settings_set_save_status("Saved!");
         } else {
             ok = false;
-            settings_save_status = "Save FAIL";
+            settings_set_save_status("Save FAIL");
         }
         watchdog_update();
         wrote = true;

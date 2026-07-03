@@ -1,5 +1,9 @@
 # CHANGELOG
 
+### 1.0.5 Save status patch
+- Save confirmation popups (`Saved!` / `Save pending` / `Save FAIL`) now auto-clear after 2 seconds so the Settings/Remap title returns.
+- No forced Flash write during active audio; deferred saves remain audio-safe.
+
 ### 1.0.5 OLED polish patch
 - Hebrew dirty-state marker now shows the literal `*` instead of the word `כוכב`.
 - Removed the CPU / Clock OLED screen from normal screen navigation. The remaining screens flow directly from Diagnostics to BT Signal.
