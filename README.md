@@ -93,3 +93,8 @@ The 1.0.5 OLED UI uses button symbols in the Remap screen where possible, in bot
 ## Persistent settings note
 
 Version 1.0.5 now stores OLED Settings in a safe app-owned flash sector instead of the last BTstack NVM sector. Remap already used a safe sector, which is why Remap could survive firmware flashing while other Settings reset.
+
+
+## OLED Help Screen
+
+Firmware 1.0.5 includes a built-in **Help** screen on the OLED. It summarizes the basic controls: KEY0/KEY1 screen navigation, Options + D-pad screen navigation from the controller, D-pad menu scrolling, Triangle save, PS + Options controller power-off, AudioKeep behavior, and controller pairing. The Help screen is read-only and does not change settings.

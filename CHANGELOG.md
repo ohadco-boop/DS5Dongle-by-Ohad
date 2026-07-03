@@ -1,4 +1,10 @@
 # CHANGELOG
+- Added a new OLED Help screen with a compact on-device quick guide: Pico/OLED navigation, controller navigation, saving, power-off, AudioKeep, and pairing.
+- Help scrolls with D-pad Up/Down and does not write to Flash or touch audio paths.
+- Hebrew popups now call the microphone `מיק שלט` instead of exposing the Pico name.
+- Removed KEY0/KEY1 navigation arrows from all OLED screens and reclaimed the left OLED margin for content.
+- Localized OLED full-screen popups in Hebrew UI: power-off, headset/headphones jack status, controller mic on/off, and save/fail messages.
+- Removed the OLED Diagnostics screen from the regular screen rotation to reduce UI clutter and avoid unused diagnostics overhead.
 
 ### 1.0.5 Safe Flash Layout Fix v2
 - Reverted the broken FlashReserveFix approach that reduced `PICO_FLASH_SIZE_BYTES`; that could make Flash writes hang and trigger watchdog during Save.

@@ -51,6 +51,10 @@ Shows Bluetooth RSSI in dBm and a signal quality indicator.
 ### VU Meters
 Shows audio activity meters for speaker and haptics paths.
 
+
+### Help
+A built-in quick guide on the OLED. Scroll with `D-Pad Up/Down`. It explains screen navigation, menu navigation, saving, power-off, AudioKeep, and pairing. It is read-only and does not change settings.
+
 ### Settings
 Firmware settings screen. Navigate with D-Pad, change values with Left/Right, and save with Triangle.
 

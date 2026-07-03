@@ -131,10 +131,10 @@ constexpr int kScreenLightbar  = 2;
 constexpr int kScreenTriggers  = 3;
 constexpr int kScreenGyro      = 4;
 constexpr int kScreenTouchpad  = 5;
-constexpr int kScreenDiag      = 6;
-constexpr int kScreenRssi      = 7;
-constexpr int kScreenVU        = 8;
-constexpr int kScreenRemap     = 9;
+constexpr int kScreenRssi      = 6;
+constexpr int kScreenVU        = 7;
+constexpr int kScreenRemap     = 8;
+constexpr int kScreenHelp      = 9;
 constexpr int kScreenSettings  = 10;
 constexpr int kNumScreens      = 11;
 int current_screen = 0;
@@ -254,6 +254,13 @@ void service_save_status_timeouts() {
     }
 }
 
+// Help screen: compact built-in quick guide.  It is deliberately read-only and
+// uses only controller D-pad Up/Down for scrolling, so it never changes runtime
+// state or touches flash/audio paths.
+int help_scroll = 0;
+uint8_t help_last_dpad = 8;
+
+
 // Factory-reset hold-Triangle-2s state. Borrowed from zurce/DS5Dongle-OLED's
 // "hold to wipe" UX pattern (https://github.com/zurce/DS5Dongle-OLED).
 uint32_t settings_tri_press_us = 0;
@@ -280,7 +287,7 @@ constexpr uint32_t kRumbleBurstUs = 250000;
 // Ohad fixed19: short on-screen status popup, used by the PS+Options
 // controller power-off combo. Stored as a small fixed buffer so callers
 // can pass string literals or temporary buffers safely.
-char oled_popup_msg[24] = {0};
+char oled_popup_msg[64] = {0};
 uint32_t oled_popup_until_us = 0;
 
 int trigger_preset = 0;
@@ -529,6 +536,27 @@ const char* oled_status_he(const char *s) {
     return "";
 }
 
+const char* oled_popup_he(const char *s) {
+    if (!s || !s[0]) return "";
+    // Full-screen splash/status popups that originate outside oled.cpp.
+    // Keep these short: the SH1107 is 128x64 and Hebrew glyphs are 5-8 px wide.
+    if (strcmp(s, "Powering Off...") == 0) return "מכבה שלט";
+    if (strcmp(s, "Power Off") == 0) return "כיבוי שלט";
+    if (strcmp(s, "Power off") == 0) return "כיבוי שלט";
+    if (strcmp(s, "Pico Mic On") == 0) return "מיק שלט פעיל";
+    if (strcmp(s, "Pico Mic Off") == 0) return "מיק שלט כבוי";
+    if (strcmp(s, "Mic On") == 0) return "מיק פעיל";
+    if (strcmp(s, "Mic Off") == 0) return "מיק כבוי";
+    if (strcmp(s, "Headset Mic") == 0) return "מיק אוזניות";
+    if (strcmp(s, "Headset") == 0) return "אוזניות";
+    if (strcmp(s, "Headphones") == 0) return "אוזניות";
+    if (strcmp(s, "Jack Out") == 0) return "אוזניות נותקו";
+    if (strcmp(s, "Saved!") == 0) return "נשמר";
+    if (strcmp(s, "Save pending") == 0) return "ממתין";
+    if (strcmp(s, "Save FAIL") == 0) return "שגיאה";
+    return s;
+}
+
 // Small PlayStation-style button symbols.  These are drawn as pixels instead
 // of font glyphs so they work in both English and Hebrew UI modes.
 void draw_tri_icon(int x, int y) {
@@ -582,11 +610,8 @@ void draw_tri_footer_he_hold(const char *action) {
 // flush_fb() on top of the rendered framebuffer so it never gets clobbered.
 // Per-screen renderers reserve x ∈ [0..5] (5-wide glyph + 1 padding) and
 // start main content at kContentX.
-constexpr int kContentX = 6;
-void draw_button_chrome() {
-    draw_char(0, 8,  '>');
-    draw_char(0, 49, '<');
-}
+constexpr int kContentX = 0;
+void draw_button_chrome() {}
 
 // Pixel-art icon support. Visual approach inspired by zurce/DS5Dongle-OLED
 // (https://github.com/zurce/DS5Dongle-OLED) — credit to zurce for the idea
@@ -1726,6 +1751,131 @@ __attribute__((noinline)) void render_screen_vu() {
 }
 
 
+
+// ---- Help screen ---------------------------------------------------------
+
+const char* const kHelpLinesEn[] = {
+    "KEY0/KEY1: screens",
+    "Options+DPad L/R",
+    "screens by gamepad",
+    "DPad Up/Down: menu",
+    "DPad L/R: change",
+    "!SAVE",
+    "PS+Options: poweroff",
+    "AudioKeep",
+    "keeps Idle off",
+    "while audio plays",
+    "Pair controller:",
+    "hold Create+PS",
+    "wait blue flashing",
+};
+
+const char* const kHelpLinesHe[] = {
+    "@KEY0 / KEY1",
+    "מעבר מסכים",
+    "@Options + D-Pad",
+    "ימין/שמאל מסכים",
+    "@D-Pad Up/Down",
+    "גלילה בתפריטים",
+    "@D-Pad Left/Right",
+    "שינוי ערך",
+    "!SAVE",
+    "@PS + Options",
+    "כיבוי שלט",
+    "אודיו מעיר",
+    "לא מכבה ב-Idle",
+    "כשיש אודיו",
+    "@Create + PS",
+    "צימוד שלט חדש",
+    "המתן להבהוב כחול",
+};
+
+int help_line_count() {
+    return ui_hebrew()
+        ? (int)(sizeof(kHelpLinesHe) / sizeof(kHelpLinesHe[0]))
+        : (int)(sizeof(kHelpLinesEn) / sizeof(kHelpLinesEn[0]));
+}
+
+void help_clamp_scroll() {
+    constexpr int kVisible = 5;
+    const int count = help_line_count();
+    const int max_scroll = (count > kVisible) ? (count - kVisible) : 0;
+    if (help_scroll < 0) help_scroll = 0;
+    if (help_scroll > max_scroll) help_scroll = max_scroll;
+}
+
+void help_handle_input() {
+    if (!bt_is_connected()) {
+        help_last_dpad = 8;
+        return;
+    }
+    const uint8_t dpad = (uint8_t)(interrupt_in_data[7] & 0x0F);
+    if (controller_screen_nav_combo_active()) {
+        help_last_dpad = dpad;
+        return;
+    }
+    if (dpad != help_last_dpad) {
+        if (dpad == 0) { // Up
+            help_scroll--;
+            last_activity_us = time_us_64();
+        } else if (dpad == 4) { // Down
+            help_scroll++;
+            last_activity_us = time_us_64();
+        }
+        help_clamp_scroll();
+        last_render_us = 0;
+    }
+    help_last_dpad = dpad;
+}
+
+void draw_help_line_en(const char *line, int y) {
+    if (strcmp(line, "!SAVE") == 0) {
+        draw_tri_icon(kContentX, y + 1);
+        draw_text(kContentX + 10, y, "=save");
+        return;
+    }
+    draw_text(kContentX, y, line);
+}
+
+void draw_help_line_he(const char *line, int y) {
+    if (strcmp(line, "!SAVE") == 0) {
+        draw_hebrew_r(126, y, "שמירה");
+        draw_tri_icon(84, y + 1);
+        return;
+    }
+    if (line[0] == '@') {
+        draw_text(kContentX, y, line + 1);
+        return;
+    }
+    draw_hebrew_r(126, y, line);
+}
+
+__attribute__((noinline)) void render_screen_help() {
+    help_handle_input();
+    help_clamp_scroll();
+
+    fb_clear();
+    draw_title("Help", "עזרה");
+
+    constexpr int kVisible = 5;
+    const int count = help_line_count();
+    const int page = help_scroll + 1;
+    const int pages = (count > kVisible) ? (count - kVisible + 1) : 1;
+    char pg[10];
+    snprintf(pg, sizeof(pg), "%d/%d", page, pages);
+    draw_text(kContentX, 0, pg);
+
+    for (int i = 0; i < kVisible; ++i) {
+        const int idx = help_scroll + i;
+        if (idx >= count) break;
+        const int y = 10 + i * 10;
+        if (ui_hebrew()) draw_help_line_he(kHelpLinesHe[idx], y);
+        else draw_help_line_en(kHelpLinesEn[idx], y);
+    }
+
+    flush_fb();
+}
+
 // ---- Remap screen --------------------------------------------------------
 // Per-button outgoing-HID remap editor. All edits are applied only to the
 // report sent to the USB host; raw controller input used by OLED/power-combo
@@ -2549,7 +2699,8 @@ bool oled_handle_controller_screen_nav_shortcut() {
 
 void oled_show_message(const char *msg, uint32_t duration_ms) {
     if (msg == nullptr) return;
-    strncpy(oled_popup_msg, msg, sizeof(oled_popup_msg) - 1);
+    const char *shown = ui_hebrew() ? oled_popup_he(msg) : msg;
+    strncpy(oled_popup_msg, shown, sizeof(oled_popup_msg) - 1);
     oled_popup_msg[sizeof(oled_popup_msg) - 1] = '\0';
     oled_popup_until_us = (uint32_t)time_us_32() + duration_ms * 1000u;
     last_activity_us = time_us_64();
@@ -2696,7 +2847,15 @@ void oled_loop() {
             int n = 0; while (t[n]) n++;
             return (128 - (n * 6 - 1)) / 2;
         };
-        draw_text(cx_for(oled_popup_msg), 28, oled_popup_msg);
+        if (ui_hebrew()) {
+            const int w = hebrew_text_width(oled_popup_msg);
+            int right = (128 + w) / 2;
+            if (right > 126) right = 126;
+            if (right < w) right = w;
+            draw_hebrew_r(right, 28, oled_popup_msg);
+        } else {
+            draw_text(cx_for(oled_popup_msg), 28, oled_popup_msg);
+        }
         flush_fb();
         return;
     }
@@ -2738,10 +2897,10 @@ void oled_loop() {
         case kScreenTriggers: render_screen_triggers();  break;
         case kScreenGyro:     render_screen_gyro();      break;
         case kScreenTouchpad: render_screen_touchpad();  break;
-        case kScreenDiag:     render_screen_diag();      break;
         case kScreenRssi:     render_screen_rssi();      break;
         case kScreenVU:       render_screen_vu();        break;
         case kScreenRemap:    render_screen_remap();     break;
+        case kScreenHelp:     render_screen_help();      break;
         case kScreenSettings: render_screen_settings();  break;
     }
 }
