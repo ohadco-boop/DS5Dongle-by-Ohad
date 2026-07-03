@@ -10,7 +10,11 @@
 #include "hardware/sync.h"
 
 constexpr uint32_t SLOTS_MAGIC = 0x44533502u;  // "DS5\x02"
-constexpr uint32_t SLOTS_FLASH_OFFSET = PICO_FLASH_SIZE_BYTES - 2u * FLASH_SECTOR_SIZE;
+#ifndef DS5_PHYSICAL_FLASH_SIZE_BYTES
+#define DS5_PHYSICAL_FLASH_SIZE_BYTES PICO_FLASH_SIZE_BYTES
+#endif
+constexpr uint32_t DS5_PHYSICAL_FLASH_BYTES = (uint32_t)DS5_PHYSICAL_FLASH_SIZE_BYTES;
+constexpr uint32_t SLOTS_FLASH_OFFSET = DS5_PHYSICAL_FLASH_BYTES - 2u * FLASH_SECTOR_SIZE;
 
 struct __attribute__((packed)) SlotsData {
     uint32_t magic;

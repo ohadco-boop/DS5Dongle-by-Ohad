@@ -1,5 +1,10 @@
 # CHANGELOG
 
+### Persistence fix
+- Reserved the top 64 KiB of Pico 2 W flash outside the UF2 application image.
+- Settings, pairing slots, and remap data remain stored at the physical end of flash and should survive re-flashing the same firmware.
+- No forced flash write during active audio was added.
+
 ### 1.0.5 Save status patch
 - Save confirmation popups (`Saved!` / `Save pending` / `Save FAIL`) now auto-clear after 2 seconds so the Settings/Remap title returns.
 - No forced Flash write during active audio; deferred saves remain audio-safe.

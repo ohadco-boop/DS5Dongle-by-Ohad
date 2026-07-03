@@ -36,7 +36,11 @@ constexpr uint8_t kUp = 0, kUpRight = 1, kRight = 2, kDownRight = 3, kDown = 4,
                   kDownLeft = 5, kLeft = 6, kUpLeft = 7, kNeutral = 8;
 
 constexpr uint32_t REMAP_MAGIC = 0x44533505u; // "DS5\x05"; v5 adds PicoMic local action target
-constexpr uint32_t REMAP_FLASH_OFFSET = PICO_FLASH_SIZE_BYTES - 3u * FLASH_SECTOR_SIZE;
+#ifndef DS5_PHYSICAL_FLASH_SIZE_BYTES
+#define DS5_PHYSICAL_FLASH_SIZE_BYTES PICO_FLASH_SIZE_BYTES
+#endif
+constexpr uint32_t DS5_PHYSICAL_FLASH_BYTES = (uint32_t)DS5_PHYSICAL_FLASH_SIZE_BYTES;
+constexpr uint32_t REMAP_FLASH_OFFSET = DS5_PHYSICAL_FLASH_BYTES - 3u * FLASH_SECTOR_SIZE;
 
 struct __attribute__((packed)) RemapData {
     uint32_t magic;
