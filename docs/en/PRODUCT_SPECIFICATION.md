@@ -39,11 +39,10 @@ Included OLED screens:
 6. Gyro Tilt
 7. Touchpad
 8. Diagnostics
-9. CPU / Clock
-10. BT Signal
-11. VU Meters
-12. Settings
-13. Remap
+9. BT Signal
+10. VU Meters
+11. Settings
+12. Remap
 
 ## Supported settings
 - Haptic Gain

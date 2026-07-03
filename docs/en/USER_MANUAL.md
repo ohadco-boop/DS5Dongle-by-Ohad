@@ -45,9 +45,6 @@ Shows touchpad state and detected finger count.
 ### Diagnostics
 Shows debug information such as uptime, USB audio rate, Bluetooth rate, HCI error count, and BT state.
 
-### CPU / Clock
-Shows configured system clock, measured clock, core voltage, and temperature.
-
 ### BT Signal
 Shows Bluetooth RSSI in dBm and a signal quality indicator.
 

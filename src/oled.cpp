@@ -13,9 +13,6 @@
 #include "hardware/spi.h"
 #include "hardware/gpio.h"
 #include "hardware/watchdog.h"
-#include "hardware/clocks.h"
-#include "hardware/vreg.h"
-#include "cmd.h"
 #include "pico/time.h"
 
 #ifndef FIRMWARE_VERSION
@@ -135,12 +132,11 @@ constexpr int kScreenTriggers  = 3;
 constexpr int kScreenGyro      = 4;
 constexpr int kScreenTouchpad  = 5;
 constexpr int kScreenDiag      = 6;
-constexpr int kScreenCpu       = 7;
-constexpr int kScreenRssi      = 8;
-constexpr int kScreenVU        = 9;
-constexpr int kScreenRemap     = 10;
-constexpr int kScreenSettings  = 11;
-constexpr int kNumScreens      = 12;
+constexpr int kScreenRssi      = 7;
+constexpr int kScreenVU        = 8;
+constexpr int kScreenRemap     = 9;
+constexpr int kScreenSettings  = 10;
+constexpr int kNumScreens      = 11;
 int current_screen = 0;
 
 // fixed65r: physical controller shortcut for OLED paging. This reads the
@@ -506,6 +502,54 @@ const char* oled_status_he(const char *s) {
     if (strcmp(s, "Reset FAIL") == 0) return "שגיאה";
     if (strcmp(s, "Slots wiped!") == 0) return "נמחק";
     return "";
+}
+
+// Small PlayStation-style button symbols.  These are drawn as pixels instead
+// of font glyphs so they work in both English and Hebrew UI modes.
+void draw_tri_icon(int x, int y) {
+    px(x + 3, y + 0, true);
+    px(x + 2, y + 1, true); px(x + 4, y + 1, true);
+    px(x + 1, y + 2, true); px(x + 5, y + 2, true);
+    px(x + 0, y + 3, true); px(x + 6, y + 3, true);
+    for (int i = 0; i < 7; ++i) px(x + i, y + 4, true);
+}
+
+void draw_circle_icon(int x, int y) {
+    px(x + 2, y + 0, true); px(x + 3, y + 0, true); px(x + 4, y + 0, true);
+    px(x + 1, y + 1, true); px(x + 5, y + 1, true);
+    px(x + 0, y + 2, true); px(x + 6, y + 2, true);
+    px(x + 0, y + 3, true); px(x + 6, y + 3, true);
+    px(x + 0, y + 4, true); px(x + 6, y + 4, true);
+    px(x + 1, y + 5, true); px(x + 5, y + 5, true);
+    px(x + 2, y + 6, true); px(x + 3, y + 6, true); px(x + 4, y + 6, true);
+}
+
+void draw_cross_icon(int x, int y) {
+    for (int i = 0; i < 7; ++i) {
+        px(x + i, y + i, true);
+        px(x + 6 - i, y + i, true);
+    }
+}
+
+void draw_square_icon(int x, int y) {
+    rect_outline(x, y, 7, 7);
+}
+
+void draw_tri_footer_en(int x, int y, const char *suffix) {
+    draw_tri_icon(x, y + 1);
+    draw_text(x + 10, y, suffix);
+}
+
+void draw_tri_footer_he_save() {
+    const char *txt = "שמירה ב";
+    draw_hebrew_r(126, 56, txt);
+    draw_tri_icon(126 - hebrew_text_width(txt) - 10, 57);
+}
+
+void draw_tri_footer_he_hold(const char *action) {
+    draw_hebrew_r(126, 56, "החזק");
+    draw_tri_icon(82, 57);
+    draw_hebrew_r(74, 56, action);
 }
 
 // Button-chrome strip on the left edge of every screen. KEY0 (top button)
@@ -1187,59 +1231,6 @@ __attribute__((noinline)) void render_screen_diag() {
     flush_fb();
 }
 
-__attribute__((noinline)) void render_screen_cpu(bool entered) {
-    fb_clear();
-    draw_title("CPU / Clock", "מעבד שעון");
-
-    char buf[24];
-
-    // Configured system clock — compile-time SYS_CLOCK_KHZ, set in main()
-    // via set_sys_clock_khz(). This is the *target*.
-    const uint32_t set_khz = (uint32_t)SYS_CLOCK_KHZ;
-    snprintf(buf, sizeof(buf), "Set : %lu MHz", (unsigned long)(set_khz / 1000u));
-    draw_text(kContentX, 12, buf);
-
-    // Actually running clk_sys, measured by the on-chip frequency counter
-    // against the crystal reference (not just what we asked for). The counter
-    // busy-waits a few ms per call, so measure ONCE on screen entry and cache
-    // it — clk_sys is fixed at boot and never changes, so the temperature
-    // (which legitimately drifts) is the only thing worth refreshing per
-    // frame. cached_real_khz==0 also forces a (re)measure as a safety net.
-    static uint32_t cached_real_khz = 0;
-    if (entered || cached_real_khz == 0) {
-        cached_real_khz = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_SYS);
-    }
-    const uint32_t real_khz = cached_real_khz;
-    snprintf(buf, sizeof(buf), "Real: %lu.%01lu MHz",
-             (unsigned long)(real_khz / 1000u),
-             (unsigned long)((real_khz % 1000u) / 100u));
-    draw_text(kContentX, 22, buf);
-
-    // Core voltage actually programmed into the regulator, read back (not the
-    // compile-time constant). Codes 0..15 are linear 0.05 V steps from 0.55 V.
-    const int vcode = (int)vreg_get_voltage();
-    if (vcode >= 0 && vcode <= 0b01111) {
-        const unsigned mv = 550u + 50u * (unsigned)vcode;
-        snprintf(buf, sizeof(buf), "Vcore: %u.%02u V", mv / 1000u, (mv % 1000u) / 10u);
-    } else {
-        snprintf(buf, sizeof(buf), "Vcore: code %d", vcode);
-    }
-    draw_text(kContentX, 32, buf);
-
-    // RP2350 on-die temperature sensor. Smoothed + averaged in cmd.cpp
-    // (single source of truth shared with the 0xfc web telemetry) so the
-    // reading converges to the true die temp instead of chasing ADC noise.
-    const uint16_t raw = cpu_temp_raw_smoothed();
-    const float volts = (float)raw * 3.3f / 4096.0f;
-    const float temp_c = 27.0f - (volts - 0.706f) / 0.001721f;
-    const int t10 = (int)(temp_c * 10.0f + (temp_c >= 0 ? 0.5f : -0.5f));
-    snprintf(buf, sizeof(buf), "Temp : %d.%d C", t10 / 10,
-             (t10 < 0 ? -t10 : t10) % 10);
-    draw_text(kContentX, 42, buf);
-
-    flush_fb();
-}
-
 // △ rising edge on the Trigger Test screen cycles trigger_preset and
 // re-applies the new effect to the paired controller. KEY1 used to do
 // this; moving it to the controller frees K0/K1 for navigation only.
@@ -1280,7 +1271,7 @@ __attribute__((noinline)) void render_screen_triggers() {
         draw_no_controller(kContentX, 24);
     }
 
-    if (ui_hebrew()) draw_hebrew_r(126, 56, "משולש מחליף"); else draw_text(kContentX, 56, "Tri=cycle");
+    if (ui_hebrew()) draw_tri_footer_he_hold("מחליף"); else draw_tri_footer_en(kContentX, 56, "=cycle");
     flush_fb();
 }
 
@@ -1716,7 +1707,7 @@ __attribute__((noinline)) void render_screen_vu() {
 // logic remains untouched.
 const char* const kRemapNames[kRemapCount] = {
     "L2", "L1", "Share", "Up", "Left", "Down", "Right", "L3",
-    "R2", "R1", "Opt", "Tri", "Cir", "Cross", "Sq", "R3",
+    "R2", "R1", "Opt", "Tri", "Circle", "Cross", "Square", "R3",
     "PS", "Pad", "Mute"
 };
 
@@ -1819,6 +1810,63 @@ void format_remap_item(int idx, char* line, size_t n) {
     else                            snprintf(line, n, "%s %s=%s", cur, kRemapNames[src], kRemapNames[tgt % kRemapCount]);
 }
 
+// Render Remap rows directly so face buttons appear as symbols rather than
+// words.  This applies to both English and Hebrew UI modes.
+static bool remap_is_face_idx(int idx) {
+    return idx == 11 || idx == 12 || idx == 13 || idx == 14; // Triangle/Circle/Cross/Square
+}
+
+static int remap_label_width_px(int idx) {
+    if (remap_is_face_idx(idx)) return 8;
+    return (int)strlen(kRemapNames[idx]) * 6;
+}
+
+static void draw_remap_label(int x, int y, int idx) {
+    switch (idx) {
+        case 11: draw_tri_icon(x, y + 1); break;
+        case 12: draw_circle_icon(x, y); break;
+        case 13: draw_cross_icon(x, y); break;
+        case 14: draw_square_icon(x, y); break;
+        default: draw_text(x, y, kRemapNames[idx]); break;
+    }
+}
+
+static void draw_remap_item_direct(int idx, int y) {
+    const bool sel = (idx == remap_sel);
+    draw_char(kContentX, y, sel ? '>' : ' ');
+
+    if (idx == kRemapEnableIdx) {
+        if (ui_hebrew()) {
+            draw_hebrew_r(126, y, remap_config_local.remap_enable ? "מיפוי פעיל" : "מיפוי כבוי");
+        } else {
+            draw_text(kContentX + 7, y, remap_config_local.remap_enable ? "Remap ON" : "Remap OFF");
+        }
+        return;
+    }
+
+    if (idx == kRemapResetIdx) {
+        if (ui_hebrew()) draw_hebrew_r(126, y, "ברירת מחדל");
+        else             draw_text(kContentX + 7, y, "Reset defaults");
+        return;
+    }
+
+    const int src = idx - kRemapFirstButtonIdx;
+    const uint8_t tgt = remap_local[src];
+    int x = kContentX + 7;
+    draw_remap_label(x, y, src);
+    x += remap_label_width_px(src) + 3;
+    draw_char(x, y, '=');
+    x += 8;
+
+    if (tgt == kRemapTargetOff) {
+        draw_text(x, y, "Off");
+    } else if (tgt == kRemapTargetPicoMic) {
+        draw_text(x, y, "PicoMic");
+    } else {
+        draw_remap_label(x, y, tgt % kRemapCount);
+    }
+}
+
 __attribute__((noinline)) void render_screen_remap() {
     if (!remap_init_done) remap_screen_load();
     remap_handle_input();
@@ -1828,7 +1876,7 @@ __attribute__((noinline)) void render_screen_remap() {
     snprintf(buf, sizeof(buf), "Remap %s", remap_dirty ? "(*)" : "   ");
     if (ui_hebrew()) {
         const char *st = oled_status_he(remap_save_status);
-        draw_hebrew_r(126, 0, st[0] ? st : (remap_dirty ? "מיפוי כוכב" : "מיפוי"));
+        draw_hebrew_r(126, 0, st[0] ? st : (remap_dirty ? "מיפוי *" : "מיפוי"));
     } else {
         draw_text(kContentX, 0, buf);
         if (remap_save_status[0]) draw_text(86, 0, remap_save_status);
@@ -1837,18 +1885,16 @@ __attribute__((noinline)) void render_screen_remap() {
     constexpr int kVisible = 5;
     int top = 0;
     if (remap_sel >= kVisible) top = remap_sel - kVisible + 1;
-    char line[28];
     for (int i = 0; i < kVisible && top + i < kNumRemapItems; i++) {
-        format_remap_item(top + i, line, sizeof(line));
-        draw_text(kContentX, 9 + i * 9, line);
+        draw_remap_item_direct(top + i, 9 + i * 9);
     }
 
     if (remap_sel == kRemapResetIdx) {
-        if (ui_hebrew()) draw_hebrew_r(126, 56, "ימין שמאל ברירת מחדל");
-        else draw_text(kContentX, 56, "Left/Right defaults Tri=save");
+        if (ui_hebrew()) draw_hebrew_r(126, 56, "ימין/שמאל ברירת מחדל");
+        else draw_tri_footer_en(kContentX, 56, "=save");
     } else {
-        if (ui_hebrew()) draw_hebrew_r(126, 56, "חצים משנים משולש שומר");
-        else draw_text(kContentX, 56, "DP nav/adj  Tri=save");
+        if (ui_hebrew()) draw_tri_footer_he_save();
+        else draw_tri_footer_en(kContentX, 56, "=save");
     }
     flush_fb();
 }
@@ -2105,17 +2151,17 @@ const char* settings_label_he(int idx) {
         case 3: return "נורת פיקו";
         case 4: return "דגימה";
         case 5: return "חוצץ שמע";
-        case 6: return "מצב שלט";
+        case 6: return "סוג שלט";
         case 7: return "רטט שמע";
         case 8: return "עוצמת רטט";
         case 9: return "סינון רטט";
         case 10: return "בהירות";
         case 11: return "סיבוב מסך";
-        case 12: return "מיקרופון";
+        case 12: return "עוצמת מיק'";
         case 13: return "עמעום מסך";
         case 14: return "כיבוי מסך";
         case 15: return "מיק בלוטות";
-        case 16: return "שלט מעיר";
+        case 16: return "אודיו מעיר";
         case 17: return "קומבו כיבוי";
         case 18: return "שמירת שמע";
         case 19: return "שפה";
@@ -2211,16 +2257,16 @@ __attribute__((noinline)) void render_screen_settings() {
 
     if (ui_hebrew()) {
         const char *st = oled_status_he(settings_save_status);
-        draw_hebrew_r(126, 0, st[0] ? st : (settings_dirty ? "הגדרות כוכב" : "הגדרות"));
+        draw_hebrew_r(126, 0, st[0] ? st : (settings_dirty ? "הגדרות *" : "הגדרות"));
         for (int i = 0; i < kVisible && top + i < kNumSettingsItems; i++) {
             draw_settings_item_he(top + i, 9 + i * 9);
         }
         if (settings_sel == kSettingsResetIdx) {
-            draw_hebrew_r(126, 56, "החזק משולש לאיפוס");
+            draw_tri_footer_he_hold("לאיפוס");
         } else if (settings_sel == kSettingsWipeSlotsIdx) {
-            draw_hebrew_r(126, 56, "החזק משולש למחיקה");
+            draw_tri_footer_he_hold("למחיקה");
         } else {
-            draw_hebrew_r(126, 56, "חצים משנים משולש שומר");
+            draw_tri_footer_he_save();
         }
     } else {
         char buf[24];
@@ -2237,11 +2283,11 @@ __attribute__((noinline)) void render_screen_settings() {
         }
 
         if (settings_sel == kSettingsResetIdx) {
-            draw_text(kContentX, 56, "Hold Tri 2s = RESET");
+            draw_tri_footer_en(kContentX, 56, " hold=RESET");
         } else if (settings_sel == kSettingsWipeSlotsIdx) {
-            draw_text(kContentX, 56, "Hold Tri 2s = WIPE");
+            draw_tri_footer_en(kContentX, 56, " hold=WIPE");
         } else {
-            draw_text(kContentX, 56, "DP nav/adj  Tri=save");
+            draw_tri_footer_en(kContentX, 56, "=save");
         }
     }
     flush_fb();
@@ -2344,7 +2390,17 @@ __attribute__((noinline)) void render_screen_slots() {
         draw_text(kContentX, 9 + i * 9, line);
     }
 
-    if (ui_hebrew()) draw_hebrew_r(126, 56, "משולש החלף ריבוע מחק"); else draw_text(kContentX, 56, "Tri=switch Sq hold=wipe");
+    if (ui_hebrew()) {
+        draw_hebrew_r(126, 56, "החלף");
+        draw_tri_icon(90, 57);
+        draw_hebrew_r(70, 56, "מחק");
+        draw_square_icon(42, 57);
+    } else {
+        draw_tri_icon(kContentX, 57);
+        draw_text(kContentX + 10, 56, "=switch");
+        draw_square_icon(68, 57);
+        draw_text(78, 56, " hold=wipe");
+    }
     flush_fb();
 }
 
@@ -2656,7 +2712,6 @@ void oled_loop() {
         case kScreenGyro:     render_screen_gyro();      break;
         case kScreenTouchpad: render_screen_touchpad();  break;
         case kScreenDiag:     render_screen_diag();      break;
-        case kScreenCpu:      render_screen_cpu(screen_entered); break;
         case kScreenRssi:     render_screen_rssi();      break;
         case kScreenVU:       render_screen_vu();        break;
         case kScreenRemap:    render_screen_remap();     break;

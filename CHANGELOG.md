@@ -1,9 +1,19 @@
 # CHANGELOG
 
+### 1.0.5 OLED polish patch
+- Hebrew dirty-state marker now shows the literal `*` instead of the word `כוכב`.
+- Removed the CPU / Clock OLED screen from normal screen navigation. The remaining screens flow directly from Diagnostics to BT Signal.
+
 ### 1.0.5 PersistentSettings patch
 - Fixed config migration so firmware upgrades preserve existing OLED Settings instead of falling back to defaults when the schema version changes.
 - New config fields are initialized safely, while existing user values are kept.
 
+
+## 1.0.5 Hebrew UI Polish - Symbol patch
+- Hebrew Settings labels updated: Controller Type, Mic Gain level, and Audio Wake wording.
+- Settings footer now shows only the Triangle save symbol instead of long arrow instructions.
+- Remap ON/OFF is localized in Hebrew UI.
+- Face buttons in Remap are drawn as button symbols where possible in both English and Hebrew UI.
 
 ## 1.0.5 - Hebrew OLED UI
 

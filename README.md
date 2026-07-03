@@ -31,7 +31,7 @@ This package includes the Audio Route Fix for browser/tester audio recovery. If 
 - USB Audio at 48 kHz.
 - Bluetooth microphone path from the controller.
 - AudioKeep: prevents Idle shutdown while audio is active.
-- 128x64 OLED UI with Status, Slots, Lightbar, Trigger Test, Gyro, Touchpad, Diagnostics, CPU, BT Signal, VU, Settings, and Remap screens.
+- 128x64 OLED UI with Status, Slots, Lightbar, Trigger Test, Gyro, Touchpad, Diagnostics, BT Signal, VU, Settings, and Remap screens.
 - Button remapping for 19 inputs, including special `Off` and `PicoMic` targets.
 - PowerCombo: `PS + Options` for safe controller disconnect/poweroff.
 - Multi-slot pairing with up to 4 slots.
@@ -85,3 +85,7 @@ For normal use, read `USER_MANUAL_EN.pdf`. For hardware and firmware details, re
 ## Version 1.0.5
 
 Adds an optional Hebrew OLED user interface. The default language remains English. Change it from `Settings -> Language` and save with Triangle.
+
+
+### OLED polish note
+The 1.0.5 OLED UI uses button symbols in the Remap screen where possible, in both English and Hebrew UI modes.
