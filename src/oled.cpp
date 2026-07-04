@@ -299,7 +299,7 @@ void service_save_status_timeouts() {
     }
 }
 
-// Help screen: compact built-in quick guide.  It is deliberately read-only and
+// Help screen: built-in manual-style guide. It is deliberately read-only and
 // uses only controller D-pad Up/Down for scrolling, so it never changes runtime
 // state or touches flash/audio paths.
 int help_scroll = 0;
@@ -541,21 +541,48 @@ void draw_hebrew_char_left(int x, int y, uint32_t cp) {
     }
 }
 
+bool hebrew_is_ascii_run_char(uint32_t cp) {
+    return cp >= 0x20 && cp <= 0x7E;
+}
+
+int hebrew_run_width(const uint32_t *cps, int first, int last) {
+    int w = 0;
+    for (int i = first; i < last; ++i) w += hebrew_char_width(cps[i]) + 1;
+    return w > 0 ? w - 1 : 0;
+}
+
 // Draw a Hebrew string right-aligned. Hebrew glyph order is rendered from
-// right to left; short ASCII values are kept readable by drawing each ASCII
-// run left-to-right inside its reserved width.
+// right to left; ASCII runs such as KEY1, PS+Options, HOST or AutoHap are drawn
+// left-to-right inside their reserved width so mixed Hebrew/English help lines
+// stay readable.
 void draw_hebrew_r(int right_x, int y, const char *s) {
     const char *p = s;
-    uint32_t cps[48];
+    uint32_t cps[64];
     int n = 0;
     while (*p && n < (int)(sizeof(cps) / sizeof(cps[0]))) cps[n++] = utf8_next(&p);
+
     int x = right_x;
-    for (int i = 0; i < n; ++i) {
+    for (int i = 0; i < n;) {
         const uint32_t cp = cps[i];
-        const int w = hebrew_char_width(cp);
-        x -= w;
-        draw_hebrew_char_left(x, y, cp);
-        x -= 1;
+        if (hebrew_is_ascii_run_char(cp)) {
+            int j = i + 1;
+            while (j < n && hebrew_is_ascii_run_char(cps[j])) ++j;
+            const int run_w = hebrew_run_width(cps, i, j);
+            x -= run_w;
+            int lx = x;
+            for (int k = i; k < j; ++k) {
+                draw_hebrew_char_left(lx, y, cps[k]);
+                lx += hebrew_char_width(cps[k]) + 1;
+            }
+            x -= 1;
+            i = j;
+        } else {
+            const int w = hebrew_char_width(cp);
+            x -= w;
+            draw_hebrew_char_left(x, y, cp);
+            x -= 1;
+            ++i;
+        }
     }
 }
 
@@ -1226,10 +1253,8 @@ __attribute__((noinline)) void render_screen() {
         draw_ps_text_icon(54, 56);
         draw_status_icon_box(53, 55, 14, 9, interrupt_in_data[9] & 0x01);
 
-        // L2/R2 analog bars already show travel; invert them as well when the
-        // digital trigger bit is set.
-        if (b8 & 0x04) rect_invert(kContentX + 32, 33, 4, 29);
-        if (b8 & 0x08) rect_invert(92, 33, 4, 29);
+        // L2/R2 analog bars already show travel. Keep them white-on-black even
+        // when the digital trigger bit is set; do not invert the trigger bars.
     } else {
         if (ui_hebrew()) {
             draw_hebrew_r(126, 14, "לצימוד שלט חדש");
@@ -1896,98 +1921,238 @@ __attribute__((noinline)) void render_screen_vu() {
 
 // ---- Help screen ---------------------------------------------------------
 
-// Built-in scroll guide.  It is intentionally long enough to replace the
-// external manual for everyday use.  Rows stay in "action: button/detail"
-// order and each one starts with a bullet for easier separation on 128x64 OLED.
-enum HelpButtonKind : uint8_t { HelpButtonText, HelpButtonTriangle };
-struct HelpItem {
-    const char *en_action;
-    const char *en_button;
-    const char *he_action;
-    const char *he_button;
-    HelpButtonKind kind;
+// Built-in manual-style guide. It uses many short scrollable lines so the OLED
+// can replace the external PDF manual for everyday operation.  Each topic starts
+// with a small bullet.  The following lines are deliberately sentence-like and
+// explanatory instead of a terse shortcut table.
+struct HelpLine {
+    const char *en;
+    const char *he;
+    uint8_t flags;
 };
 
-const HelpItem kHelpItems[] = {
-    {"Next screen", "KEY1",          "מסך הבא",       "KEY1",        HelpButtonText},
-    {"Prev screen", "KEY0",          "מסך קודם",      "KEY0",        HelpButtonText},
-    {"Scr nav",     "Opt+D L/R",     "ניווט מסך",     "Opt+D L/R",   HelpButtonText},
-    {"Help scroll", "D U/D",         "גלילת עזרה",    "D U/D",       HelpButtonText},
-    {"Menu scroll", "D U/D",         "גלילת תפריט",   "D U/D",       HelpButtonText},
-    {"Change val",  "D L/R",         "שינוי ערך",     "D L/R",       HelpButtonText},
-    {"Save edits",  "",              "שמירת שינוי",   "",            HelpButtonTriangle},
-    {"Back status", "KEY0/K1",       "חזרה לסטטוס",   "KEY0/K1",     HelpButtonText},
-    {"Reboot",      "KEY0+KEY1",     "הפעלה מחדש",    "KEY0+KEY1",   HelpButtonText},
-    {"Pair pad",    "Create+PS",     "צימוד שלט",     "Create+PS",   HelpButtonText},
-    {"Power off",   "PS+Opt",        "כיבוי שלט",     "PS+Opt",      HelpButtonText},
-    {"Wake OLED",   "any input",     "הערת מסך",      "any input",   HelpButtonText},
-    {"CtrlWake",    "pad input",     "הערה משלט",     "pad input",   HelpButtonText},
-    {"Dim OLED",    "ScrDim",        "עמעום מסך",     "ScrDim",      HelpButtonText},
-    {"Off OLED",    "ScrOff",        "כיבוי מסך",     "ScrOff",      HelpButtonText},
-    {"Rotate OLED", "OLED Rot",      "סיבוב מסך",     "OLED Rot",    HelpButtonText},
-    {"Brightness",  "OLED Bright",   "בהירות",        "OLED Bright", HelpButtonText},
-    {"Quick bright","KEY1 hold",     "בהירות מהירה",  "KEY1 hold",   HelpButtonText},
+constexpr uint8_t kHelpHeader = 0x01;
+constexpr uint8_t kHelpHeAscii = 0x02;
 
-    {"Status",      "live pad",      "סטטוס",         "live pad",    HelpButtonText},
-    {"Battery",     "% + icon",      "סוללה",         "% + icon",    HelpButtonText},
-    {"BT address",  "MAC",           "כתובת",         "BT MAC",         HelpButtonText},
-    {"Stick move",  "dots",          "סטיקים",        "dots",        HelpButtonText},
-    {"L3/R3",       "box invert",    "לחיצת סטיק",    "box invert",  HelpButtonText},
-    {"L2/R2",       "bars",          "טריגרים",       "bars",        HelpButtonText},
-    {"D-Pad",       "arrows",        "חצים",          "arrows",      HelpButtonText},
-    {"Face btns",   "symbols",       "כפתורי פעולה",  "symbols",     HelpButtonText},
-    {"L1/R1",       "text labels",   "כתפיים",        "L1/R1",       HelpButtonText},
-    {"Create",      "small icon",    "קריאייט",       "small icon",  HelpButtonText},
-    {"Options",     "menu icon",     "אופציות",       "menu icon",   HelpButtonText},
-    {"Touchpad",    "pad icon",      "משטח מגע",      "pad icon",    HelpButtonText},
-    {"PS",          "PS label",      "כפתור",         "PS label",    HelpButtonText},
+const HelpLine kHelpLines[] = {
+    {"Built-in guide", "מדריך מובנה", kHelpHeader},
+    {"This screen explains", "המסך הזה מסביר", 0},
+    {"the menus without PDF.", "את התפריטים במכשיר", 0},
+    {"Scroll this help with", "גוללים את העזרה", 0},
+    {"D-Pad Up / Down.", "D-Pad Up / Down", kHelpHeAscii},
 
-    {"Slots",       "pair memory",   "סלוטים",        "memory",      HelpButtonText},
-    {"Pick slot",   "D U/D",         "בחירת סלוט",    "D U/D",       HelpButtonText},
-    {"Active slot", "*",             "סלוט פעיל",     "*",           HelpButtonText},
-    {"Switch slot", "Triangle",      "החלפת סלוט",    "Triangle",    HelpButtonText},
-    {"Delete slot", "Square hold",   "מחיקת סלוט",    "Square hold", HelpButtonText},
-    {"Empty slot",  "no MAC",        "סלוט ריק",      "no MAC",      HelpButtonText},
+    {"Screen navigation", "ניווט בין מסכים", kHelpHeader},
+    {"Move between OLED", "אפשר לעבור בין", 0},
+    {"screens with side keys.", "מסכי המכשיר", 0},
+    {"KEY1 goes forward.", "בעזרת כפתורי הצד", 0},
+    {"KEY0 goes backward.", "KEY1 הבא", 0},
+    {"From the controller:", "KEY0 הקודם", 0},
+    {"hold Options and use", "או דרך השלט:", 0},
+    {"D-Pad Left / Right.", "Options + DPad L/R", kHelpHeAscii},
+    {"Hold KEY0+KEY1", "החזקת שני כפתורי", 0},
+    {"to reboot the Pico.", "הצד מפעילה מחדש", 0},
 
-    {"Lightbar",    "LED screen",    "תאורה",         "LED screen",  HelpButtonText},
-    {"LED mode",    "R1",            "מצב תאורה",     "R1",          HelpButtonText},
-    {"HOST LED",    "console color", "תאורת מארח",    "host color",  HelpButtonText},
-    {"BATT LED",    "battery color", "תאורת סוללה",   "batt color",  HelpButtonText},
-    {"Triggers",    "L2/R2 view",    "מסך טריגרים",   "L2/R2 view",  HelpButtonText},
-    {"Gyro",        "motion view",   "מסך גיירו",     "motion view", HelpButtonText},
-    {"Touch view",  "finger pos",    "מסך מגע",       "finger pos",  HelpButtonText},
-    {"BT Signal",   "RSSI dBm",      "אות בלוטות",    "RSSI dBm",    HelpButtonText},
-    {"VU",          "audio level",   "עוצמת שמע",    "audio level", HelpButtonText},
+    {"Pairing a controller", "צימוד שלט", kHelpHeader},
+    {"If no pad is paired,", "כשאין שלט מחובר", 0},
+    {"Status shows pairing", "מסך סטטוס מציג", 0},
+    {"instructions on screen.", "הוראות צימוד", 0},
+    {"Hold Create + PS", "Create + PS", kHelpHeAscii},
+    {"until the light bar", "מחזיקים עד שפס", 0},
+    {"flashes blue.", "התאורה מהבהב כחול", 0},
+    {"Then wait for BT", "אחר כך ממתינים", 0},
+    {"connection to finish.", "לחיבור בלוטות", 0},
 
-    {"Remap",       "USB mapping",   "מיפוי",         "USB map",     HelpButtonText},
-    {"Remap ON",    "first row",     "מיפוי פעיל",    "first row",   HelpButtonText},
-    {"Pick source", "D U/D",         "בחירת מקור",    "D U/D",       HelpButtonText},
-    {"Pick target", "D L/R",         "בחירת יעד",     "D L/R",       HelpButtonText},
-    {"Disable btn", "Off target",    "ביטול כפתור",   "Off target",  HelpButtonText},
-    {"Pico mic",    "Mute->PicoMic", "מיק פיקו",      "Mute>Pico",   HelpButtonText},
-    {"Reset remap", "Reset row",     "איפוס מיפוי",   "Reset row",   HelpButtonText},
-    {"Save remap",  "",              "שמירת מיפוי",   "",            HelpButtonTriangle},
+    {"Status screen", "מסך סטטוס", kHelpHeader},
+    {"Status is the live", "סטטוס הוא המסך", 0},
+    {"controller monitor.", "הראשי למצב השלט", 0},
+    {"It shows version,", "הוא מציג גרסה", 0},
+    {"BT address, battery", "כתובת בלוטות", 0},
+    {"and charge state.", "סוללה וטעינה", 0},
+    {"The two squares are", "שני הריבועים הם", 0},
+    {"left and right sticks.", "הסטיקים ימין ושמאל", 0},
+    {"The dot is stick", "הנקודה מראה את", 0},
+    {"position in real time.", "מיקום הסטיק בזמן אמת", 0},
+    {"L3/R3 invert their", "לחיצת L3 או R3", 0},
+    {"stick box when pressed.", "הופכת את ריבוע הסטיק", 0},
+    {"L2/R2 are vertical", "L2 ו R2 מוצגים", 0},
+    {"analog trigger bars.", "כפסים אנלוגיים", 0},
+    {"D-Pad is shown with", "החצים מוצגים", 0},
+    {"real arrow icons.", "בסמלי חצים", 0},
+    {"Triangle, Circle, X", "משולש עיגול X", 0},
+    {"and Square show the", "וריבוע מציגים את", 0},
+    {"face buttons.", "כפתורי הפעולה", 0},
+    {"L1/R1 are text labels.", "L1 R1 הם כיתוב", 0},
+    {"Create, touchpad,", "גם Create משטח מגע", 0},
+    {"Options and PS also", "Options ו PS", 0},
+    {"have live indicators.", "מקבלים חיווי לחיצה", 0},
 
-    {"Language",    "HE/EN",         "שפה",           "HE/EN",       HelpButtonText},
-    {"Ctrl type",   "DS5/DSE/Auto",  "סוג שלט",       "DS5/DSE/Auto",HelpButtonText},
-    {"Polling",     "250/500/RT",    "קצב דגימה",     "250/500/RT",  HelpButtonText},
-    {"Idle",        "off/min",       "כיבוי אוטו",    "off/min",     HelpButtonText},
-    {"AudioKeep",   "no idle",       "אודיו מעיר",    "no idle",     HelpButtonText},
-    {"Spk Vol",     "speaker",       "רמקול",         "speaker",     HelpButtonText},
-    {"Mic Gain",    "+/- dB",        "מיקרופון",      "+/- dB",      HelpButtonText},
-    {"BT Mic",      "on/off",        "מיק בלוטות",    "on/off",      HelpButtonText},
-    {"AudBuf",      "latency",       "חוצץ שמע",      "latency",     HelpButtonText},
-    {"Hap Gain",    "rumble",        "עוצמת רטט",     "rumble",      HelpButtonText},
-    {"AutoHap",     "audio rumble",  "רטט שמע",       "audio rumble",HelpButtonText},
-    {"AH Gain",     "auto level",    "עוצמת אוטו",   "auto level",  HelpButtonText},
-    {"AH LP",       "low pass",      "סינון אוטו",    "low pass",    HelpButtonText},
-    {"Pico LED",    "on/off",        "נורת פיקו",     "on/off",      HelpButtonText},
-    {"Wipe slots",  "Triangle hold", "מחיקת סלוטים",  "Tri hold",    HelpButtonText},
-    {"Reset all",   "Triangle hold", "איפוס הגדרות",  "Tri hold",    HelpButtonText},
+    {"Slots screen", "מסך סלוטים", kHelpHeader},
+    {"Slots store pairing", "סלוטים שומרים", 0},
+    {"records for pads.", "צימודים לשלטים", 0},
+    {"There are four slots.", "יש ארבעה סלוטים", 0},
+    {"The star marks the", "כוכבית מסמנת את", 0},
+    {"active slot.", "הסלוט הפעיל", 0},
+    {"Select a slot with", "בוחרים סלוט עם", 0},
+    {"D-Pad Up / Down.", "D-Pad Up / Down", kHelpHeAscii},
+    {"Press Triangle to", "משולש מעביר את", 0},
+    {"switch active slot.", "הסלוט הפעיל", 0},
+    {"Hold Square to", "החזקה על ריבוע", 0},
+    {"delete one slot.", "מוחקת סלוט אחד", 0},
+    {"Empty means no saved", "ריק אומר שאין", 0},
+    {"controller in it.", "שלט שמור בסלוט", 0},
+
+    {"Lightbar screen", "מסך תאורה", kHelpHeader},
+    {"Lightbar controls", "מסך תאורה שולט", 0},
+    {"the controller LED.", "בפס התאורה של השלט", 0},
+    {"HOST lets the PC", "HOST נותן למחשב", 0},
+    {"choose the color.", "לבחור את הצבע", 0},
+    {"BATT shows battery", "BATT מציג צבע", 0},
+    {"color from dongle.", "לפי מצב הסוללה", 0},
+    {"Use R1 to change", "עם R1 מחליפים", 0},
+    {"lightbar mode.", "מצב תאורה", 0},
+
+    {"Triggers screen", "מסך טריגרים", kHelpHeader},
+    {"Triggers page is for", "מסך טריגרים מיועד", 0},
+    {"testing L2 and R2.", "לבדיקת L2 ו R2", 0},
+    {"It helps verify", "הוא עוזר לבדוק", 0},
+    {"adaptive feedback.", "משוב אדפטיבי", 0},
+    {"Status bars stay", "בסטטוס הפסים", 0},
+    {"white-on-black.", "נשארים לבן על שחור", 0},
+
+    {"Gyro screen", "מסך גיירו", kHelpHeader},
+    {"Gyro shows motion", "גיירו מציג נתוני", 0},
+    {"and tilt values.", "תנועה והטיה", 0},
+    {"Use it to confirm", "משתמשים בו כדי", 0},
+    {"motion input works.", "לוודא שחיישנים עובדים", 0},
+
+    {"Touchpad screen", "מסך משטח מגע", kHelpHeader},
+    {"Touchpad shows", "מסך מגע מציג", 0},
+    {"finger positions.", "מיקום אצבעות", 0},
+    {"It also shows how", "הוא מציג גם", 0},
+    {"many fingers exist.", "כמה אצבעות זוהו", 0},
+
+    {"BT Signal screen", "מסך אות בלוטות", kHelpHeader},
+    {"BT Signal shows", "אות בלוטות מציג", 0},
+    {"RSSI in dBm.", "RSSI ב dBm", 0},
+    {"Closer to zero is", "מספר קרוב לאפס", 0},
+    {"usually stronger.", "בדרך כלל חזק יותר", 0},
+
+    {"VU screen", "מסך עוצמת שמע", kHelpHeader},
+    {"VU meters show", "מסך VU מציג", 0},
+    {"live audio level.", "עוצמת שמע חיה", 0},
+    {"Spk is speaker", "Spk הוא רמקול", 0},
+    {"audio from host.", "שמע מהמחשב", 0},
+    {"Hap is haptic", "Hap הוא ערוץ", 0},
+    {"audio energy.", "אנרגיית רטט", 0},
+
+    {"Remap screen", "מסך מיפוי", kHelpHeader},
+    {"Remap changes what", "מיפוי משנה מה", 0},
+    {"button USB reports.", "הכפתור מדווח למחשב", 0},
+    {"First row turns", "השורה הראשונה", 0},
+    {"Remap ON or OFF.", "מפעילה או מכבה", 0},
+    {"Choose source with", "בוחרים מקור עם", 0},
+    {"D-Pad Up / Down.", "D-Pad Up / Down", kHelpHeAscii},
+    {"Choose target with", "בוחרים יעד עם", 0},
+    {"D-Pad Left / Right.", "D-Pad Left / Right", kHelpHeAscii},
+    {"OFF disables a", "OFF מכבה כפתור", 0},
+    {"button output.", "בדיווח למחשב", 0},
+    {"PicoMic maps a", "PicoMic קושר", 0},
+    {"button to local mic.", "כפתור למיקרופון מקומי", 0},
+    {"Press Triangle to", "משולש שומר", 0},
+    {"save remap changes.", "שינויי מיפוי", 0},
+
+    {"Settings screen", "מסך הגדרות", kHelpHeader},
+    {"Settings changes", "הגדרות משנות", 0},
+    {"dongle behavior.", "את התנהגות הדונגל", 0},
+    {"Move through rows", "עוברים בין שורות", 0},
+    {"with D-Pad Up/Down.", "עם D-Pad Up/Down", 0},
+    {"Change value with", "משנים ערך עם", 0},
+    {"D-Pad Left/Right.", "D-Pad Left/Right", kHelpHeAscii},
+    {"Press Triangle to", "משולש שומר", 0},
+    {"save settings.", "את ההגדרות", 0},
+    {"Danger actions are", "פעולות מסוכנות", 0},
+    {"at the bottom.", "נמצאות בסוף", 0},
+    {"They require holding", "הן דורשות החזקה", 0},
+    {"Triangle on purpose.", "על משולש בכוונה", 0},
+
+    {"Language", "שפה", kHelpHeader},
+    {"Language selects", "שפה מחליפה", 0},
+    {"English or Hebrew UI.", "בין עברית לאנגלית", 0},
+
+    {"Ctrl", "Ctrl", kHelpHeader | kHelpHeAscii},
+    {"Ctrl selects controller", "Ctrl בוחר סוג שלט", 0},
+    {"type: DS5, DSE, Auto.", "DS5 / DSE / Auto", kHelpHeAscii},
+    {"Auto is safest unless", "Auto מתאים ברוב", 0},
+    {"you need to force one.", "המקרים", 0},
+
+    {"Poll", "Poll", kHelpHeader | kHelpHeAscii},
+    {"Poll changes USB", "Poll משנה קצב", 0},
+    {"report timing.", "דיווח USB", 0},
+    {"Use RT for realtime", "RT הוא מצב", 0},
+    {"when supported.", "זמן אמת כשנתמך", 0},
+
+    {"Idle", "Idle", kHelpHeader | kHelpHeAscii},
+    {"Idle powers off pad", "Idle מכבה שלט", 0},
+    {"after no activity.", "אחרי חוסר פעילות", 0},
+    {"Off disables this.", "Off מבטל את זה", 0},
+
+    {"AudioKeep", "AudioKeep", kHelpHeader | kHelpHeAscii},
+    {"AudioKeep prevents", "AudioKeep מונע", 0},
+    {"Idle power-off while", "כיבוי Idle בזמן", 0},
+    {"USB audio is active.", "שיש שמע USB פעיל", 0},
+
+    {"Speaker and mic", "שמע ומיקרופון", kHelpHeader},
+    {"Spk Vol changes", "Spk Vol משנה", 0},
+    {"controller speaker level.", "עוצמת רמקול", 0},
+    {"Mic Gain changes", "Mic Gain משנה", 0},
+    {"BT mic gain.", "הגבר מיקרופון", 0},
+    {"BT Mic enables", "BT Mic מפעיל", 0},
+    {"controller mic path.", "נתיב מיקרופון שלט", 0},
+    {"AudBuf changes", "AudBuf משנה", 0},
+    {"audio buffer size.", "גודל חוצץ שמע", 0},
+
+    {"Haptics", "רטט והפטיקס", kHelpHeader},
+    {"Hap Gain changes", "Hap Gain משנה", 0},
+    {"haptic strength.", "עוצמת רטט", 0},
+    {"AutoHap creates", "AutoHap יוצר", 0},
+    {"haptics from audio.", "רטט מתוך שמע", 0},
+    {"AH Gain changes", "AH Gain משנה", 0},
+    {"AutoHap strength.", "עוצמת AutoHap", 0},
+    {"AH LP changes the", "AH LP משנה", 0},
+    {"low-pass filter.", "פילטר נמוכים", 0},
+
+    {"OLED options", "אפשרויות OLED", kHelpHeader},
+    {"OLED Bright changes", "OLED Bright משנה", 0},
+    {"screen brightness.", "בהירות מסך", 0},
+    {"OLED Rot flips the", "OLED Rot הופך", 0},
+    {"display 180 degrees.", "את המסך 180 מעלות", 0},
+    {"ScrDim sets time", "ScrDim קובע זמן", 0},
+    {"until dimming.", "עד עמעום", 0},
+    {"ScrOff sets time", "ScrOff קובע זמן", 0},
+    {"until screen off.", "עד כיבוי מסך", 0},
+    {"CtrlWake lets pad", "CtrlWake נותן", 0},
+    {"input wake OLED.", "לשלט להעיר מסך", 0},
+
+    {"Power options", "אפשרויות כוח", kHelpHeader},
+    {"PowerCombo enables", "PowerCombo מאפשר", 0},
+    {"PS + Options off.", "כיבוי עם PS+Options", 0},
+    {"Pico LED controls", "Pico LED שולט", 0},
+    {"the board LED.", "בנורת הלוח", 0},
+    {"Power-off path", "בכיבוי בטוח", 0},
+    {"saves pending data", "הדונגל שומר מידע", 0},
+    {"before disconnecting.", "לפני ניתוק השלט", 0},
+
+    {"Reset and wipe", "איפוס ומחיקה", kHelpHeader},
+    {"Reset to defaults", "Reset to defaults", kHelpHeAscii},
+    {"restores settings.", "מחזיר הגדרות מקור", 0},
+    {"Wipe all slots", "Wipe all slots", kHelpHeAscii},
+    {"deletes all pairings.", "מוחק את כל הצימודים", 0},
+    {"Both require holding", "שניהם דורשים החזקת", 0},
+    {"Triangle, not a tap.", "משולש ולא לחיצה קצרה", 0},
 };
 
 int help_line_count() {
-    return (int)(sizeof(kHelpItems) / sizeof(kHelpItems[0]));
+    return (int)(sizeof(kHelpLines) / sizeof(kHelpLines[0]));
 }
 
 void help_clamp_scroll() {
@@ -2022,34 +2187,35 @@ void help_handle_input() {
     help_last_dpad = dpad;
 }
 
-void draw_help_item_en(const HelpItem &it, int y) {
-    draw_bullet_dot(kContentX, y);
-    int x = kContentX + 6;
-    draw_text(x, y, it.en_action);
-    x += (int)strlen(it.en_action) * 6;
-    draw_text(x, y, ":");
-    x += 6;
-    if (it.kind == HelpButtonTriangle) {
-        draw_tri_icon(x + 1, y + 1);
-    } else {
-        draw_text(x, y, it.en_button);
+bool help_hebrew_line_is_ascii(const HelpLine &line) {
+    if (line.flags & kHelpHeAscii) return true;
+    const unsigned char *p = (const unsigned char *)line.he;
+    while (*p) {
+        if (*p >= 0x80) return false;
+        ++p;
     }
+    return true;
 }
 
-void draw_help_item_he(const HelpItem &it, int y) {
-    // RTL layout: bullet | Hebrew action | ':' | ASCII/icon button to the left.
-    draw_bullet_dot(123, y);
-    const int action_right = 118;
-    draw_hebrew_r(action_right, y, it.he_action);
-    const int action_w = hebrew_text_width(it.he_action);
-    const int colon_x = action_right - action_w - 5;
-    draw_text(colon_x, y, ":");
-    if (it.kind == HelpButtonTriangle) {
-        draw_tri_icon(colon_x - 10, y + 1);
-    } else {
-        const int button_w = (int)strlen(it.he_button) * 6;
-        draw_text(colon_x - button_w - 2, y, it.he_button);
+void draw_help_line_en(const HelpLine &line, int y) {
+    int x = kContentX;
+    if (line.flags & kHelpHeader) {
+        draw_bullet_dot(kContentX, y);
+        x += 6;
     }
+    draw_text(x, y, line.en);
+}
+
+void draw_help_line_he(const HelpLine &line, int y) {
+    if (line.flags & kHelpHeader) {
+        draw_bullet_dot(123, y);
+        if (help_hebrew_line_is_ascii(line)) draw_text(kContentX, y, line.he);
+        else                                draw_hebrew_r(118, y, line.he);
+        return;
+    }
+
+    if (help_hebrew_line_is_ascii(line)) draw_text(kContentX, y, line.he);
+    else                                draw_hebrew_r(126, y, line.he);
 }
 
 __attribute__((noinline)) void render_screen_help() {
@@ -2065,8 +2231,6 @@ __attribute__((noinline)) void render_screen_help() {
     char pg[10];
     snprintf(pg, sizeof(pg), "%d/%d", page, pages);
 
-    // Keep the page counter away from the Help title.  In English the old
-    // counter at x=0 overlapped the word "Help" on the top line.
     if (ui_hebrew()) {
         draw_title("Help", "עזרה");
         draw_text(kContentX, 0, pg);
@@ -2080,8 +2244,8 @@ __attribute__((noinline)) void render_screen_help() {
         const int idx = help_scroll + i;
         if (idx >= count) break;
         const int y = 10 + i * 10;
-        if (ui_hebrew()) draw_help_item_he(kHelpItems[idx], y);
-        else             draw_help_item_en(kHelpItems[idx], y);
+        if (ui_hebrew()) draw_help_line_he(kHelpLines[idx], y);
+        else             draw_help_line_en(kHelpLines[idx], y);
     }
 
     flush_fb();

@@ -1,3 +1,9 @@
+## 1.0.5 - Manual-style Help and Status trigger polish
+
+- Reworked the OLED Help screen from a short shortcut list into a long built-in manual with detailed scrollable explanations for navigation, pairing, Status, Slots, Lightbar, Triggers, Gyro, Touchpad, BT Signal, VU, Remap, and Settings options.
+- Kept Help read-only; it still scrolls with D-Pad Up/Down and does not touch flash, audio, or runtime settings.
+- Status L2/R2 trigger bars now remain white-on-black while pressed; only button icons use pressed inversion.
+
 ## 1.0.5 - OLED Help / Status polish v2
 
 - Expanded the OLED Help screen into a much fuller on-device guide, with about 70 scrollable `action: button/detail` rows so the dongle is less dependent on an external manual.
