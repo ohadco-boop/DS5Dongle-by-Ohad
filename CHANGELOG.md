@@ -1,3 +1,12 @@
+## 1.0.5 - OLED Help / Status polish
+
+- Reworked the OLED Help screen so each item reads `action: button` instead of `button: action`.
+- Added a small bullet at the start of each Help item in English and Hebrew for clearer separation.
+- Improved the Hebrew Slots footer spacing so the Square icon no longer sits too close to `מחק`.
+- Replaced generic square indicators on the Status screen with D-pad arrows and PlayStation-style button symbols.
+- Added compact Status indicators for the previously missing Create, Options, PS, Touchpad and Mute buttons.
+- Replaced `Up`, `Down`, `Left`, and `Right` text on the Remap screen with arrow symbols.
+
 # CHANGELOG
 - Reordered OLED screen rotation so Help appears immediately after Status and before Slots.
 - Reordered the Settings menu into logical groups: language/control, power/audio, haptics, display, then maintenance actions.

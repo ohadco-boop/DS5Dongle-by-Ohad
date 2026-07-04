@@ -633,6 +633,74 @@ void draw_square_icon(int x, int y) {
     rect_outline(x, y, 7, 7);
 }
 
+void draw_bullet_dot(int x, int y) {
+    rect_filled(x, y + 2, 3, 3);
+}
+
+void draw_arrow_icon(int x, int y, char dir) {
+    // 7x7 directional arrows for D-pad / Remap.
+    if (dir == 'U') {
+        px(x + 3, y + 0, true);
+        px(x + 2, y + 1, true); px(x + 3, y + 1, true); px(x + 4, y + 1, true);
+        px(x + 1, y + 2, true); px(x + 3, y + 2, true); px(x + 5, y + 2, true);
+        for (int j = 3; j < 7; ++j) px(x + 3, y + j, true);
+    } else if (dir == 'D') {
+        for (int j = 0; j < 4; ++j) px(x + 3, y + j, true);
+        px(x + 1, y + 4, true); px(x + 3, y + 4, true); px(x + 5, y + 4, true);
+        px(x + 2, y + 5, true); px(x + 3, y + 5, true); px(x + 4, y + 5, true);
+        px(x + 3, y + 6, true);
+    } else if (dir == 'L') {
+        px(x + 0, y + 3, true);
+        px(x + 1, y + 2, true); px(x + 1, y + 3, true); px(x + 1, y + 4, true);
+        px(x + 2, y + 1, true); px(x + 2, y + 3, true); px(x + 2, y + 5, true);
+        for (int i = 3; i < 7; ++i) px(x + i, y + 3, true);
+    } else { // 'R'
+        for (int i = 0; i < 4; ++i) px(x + i, y + 3, true);
+        px(x + 4, y + 1, true); px(x + 4, y + 3, true); px(x + 4, y + 5, true);
+        px(x + 5, y + 2, true); px(x + 5, y + 3, true); px(x + 5, y + 4, true);
+        px(x + 6, y + 3, true);
+    }
+}
+
+void draw_status_icon_box(int x, int y, int w, int h, bool pressed) {
+    if (pressed) rect_invert(x, y, w, h);
+}
+
+void draw_create_icon(int x, int y) {
+    // DualSense Create: three small stacked strokes.
+    rect_outline(x, y + 1, 7, 5);
+    px(x + 2, y + 2, true); px(x + 3, y + 2, true); px(x + 4, y + 2, true);
+    px(x + 2, y + 4, true); px(x + 3, y + 4, true); px(x + 4, y + 4, true);
+}
+
+void draw_options_icon(int x, int y) {
+    // DualSense Options: menu lines.
+    for (int i = 0; i < 7; ++i) {
+        px(x + i, y + 1, true);
+        px(x + i, y + 3, true);
+        px(x + i, y + 5, true);
+    }
+}
+
+void draw_touchpad_icon(int x, int y) {
+    rect_outline(x, y, 13, 7);
+    px(x + 3, y + 2, true); px(x + 9, y + 2, true);
+    px(x + 6, y + 4, true);
+}
+
+void draw_mute_icon(int x, int y) {
+    // Tiny microphone symbol with slash.
+    rect_outline(x + 2, y, 4, 5);
+    px(x + 1, y + 4, true); px(x + 6, y + 4, true);
+    px(x + 3, y + 5, true); px(x + 4, y + 5, true);
+    px(x + 4, y + 6, true);
+    for (int i = 0; i < 7; ++i) px(x + i, y + 6 - i, true);
+}
+
+void draw_ps_text_icon(int x, int y) {
+    draw_text(x, y, "PS");
+}
+
 void draw_tri_footer_en(int x, int y, const char *suffix) {
     draw_tri_icon(x, y + 1);
     draw_text(x + 10, y, suffix);
@@ -1101,38 +1169,62 @@ __attribute__((noinline)) void render_screen() {
         const uint8_t b7 = interrupt_in_data[7];
         const uint8_t b8 = interrupt_in_data[8];
 
-        // D-pad indicator (4 directions; lit for primary + diagonals).
-        // Centered between the left stick column and the face-button cluster.
+        // D-pad indicator with real arrows instead of generic squares.
+        // Primary and diagonal presses light the relevant arrow boxes.
         const int dp = b7 & 0x0F;
         const bool dp_n = (dp == 7 || dp == 0 || dp == 1);
         const bool dp_e = (dp == 1 || dp == 2 || dp == 3);
         const bool dp_s = (dp == 3 || dp == 4 || dp == 5);
         const bool dp_w = (dp == 5 || dp == 6 || dp == 7);
-        const int dcx = 52, dcy = 46;
-        auto dot = [&](int dx, int dy, bool on) {
-            if (on) rect_filled(dcx + dx - 2, dcy + dy - 2, 5, 5);
-            else    rect_outline(dcx + dx - 2, dcy + dy - 2, 5, 5);
+        auto dpad_icon = [&](int x, int y, char dir, bool on) {
+            draw_arrow_icon(x, y, dir);
+            draw_status_icon_box(x - 1, y - 1, 9, 9, on);
         };
-        dot(0,  -7, dp_n);
-        dot(7,   0, dp_e);
-        dot(0,   7, dp_s);
-        dot(-7,  0, dp_w);
+        const int dcx = 50, dcy = 45;
+        dpad_icon(dcx,     dcy - 11, 'U', dp_n);
+        dpad_icon(dcx + 9, dcy - 2,  'R', dp_e);
+        dpad_icon(dcx,     dcy + 7,  'D', dp_s);
+        dpad_icon(dcx - 9, dcy - 2,  'L', dp_w);
 
-        const int fcx = 64, fcy = 46;
-        auto sq = [&](int dx, int dy, bool on) {
-            if (on) rect_filled(fcx + dx - 2, fcy + dy - 2, 5, 5);
-            else    rect_outline(fcx + dx - 2, fcy + dy - 2, 5, 5);
+        // Face buttons now use the real PlayStation symbols instead of four
+        // identical boxes. Pressed buttons are inverted so they pop clearly.
+        auto face_icon = [&](int x, int y, int kind, bool on) {
+            if      (kind == 0) draw_tri_icon(x, y + 1);
+            else if (kind == 1) draw_circle_icon(x, y);
+            else if (kind == 2) draw_cross_icon(x, y);
+            else                draw_square_icon(x, y);
+            draw_status_icon_box(x - 1, y - 1, 9, 9, on);
         };
-        // shift face buttons right so they don't collide with d-pad
-        const int fcx_off = 18;
-        sq(fcx_off + 0,  -8, b7 & 0x80); // Triangle
-        sq(fcx_off + 8,   0, b7 & 0x40); // Circle
-        sq(fcx_off + 0,   8, b7 & 0x20); // Cross
-        sq(fcx_off - 8,   0, b7 & 0x10); // Square
+        const int fcx = 76, fcy = 45;
+        face_icon(fcx,     fcy - 11, 0, b7 & 0x80); // Triangle
+        face_icon(fcx + 9, fcy - 2,  1, b7 & 0x40); // Circle
+        face_icon(fcx,     fcy + 7,  2, b7 & 0x20); // Cross
+        face_icon(fcx - 9, fcy - 2,  3, b7 & 0x10); // Square
 
-        // L1 bar shifted to sit between the L2 trigger column and the d-pad.
-        if (b8 & 0x01) rect_filled(42, 30, 8, 3);  else rect_outline(42, 30, 8, 3);  // L1
-        if (b8 & 0x02) rect_filled(80, 30, 12, 3); else rect_outline(80, 30, 12, 3); // R1
+        // Shoulder / system buttons.  These were partly missing from Status;
+        // keep them tiny so all controls fit between the stick boxes.
+        // L1/R1 as compact shoulder bars.
+        rect_outline(38, 28, 9, 3);
+        if (b8 & 0x01) rect_invert(38, 28, 9, 3);
+        rect_outline(86, 28, 6, 3);
+        if (b8 & 0x02) rect_invert(86, 28, 6, 3);
+
+        draw_create_icon(52, 27);
+        draw_status_icon_box(51, 26, 9, 9, b8 & 0x10);
+        draw_touchpad_icon(62, 27);
+        draw_status_icon_box(61, 26, 15, 9, interrupt_in_data[9] & 0x02);
+        draw_options_icon(78, 27);
+        draw_status_icon_box(77, 26, 9, 9, b8 & 0x20);
+
+        draw_ps_text_icon(58, 56);
+        draw_status_icon_box(57, 55, 14, 9, interrupt_in_data[9] & 0x01);
+        draw_mute_icon(70, 56);
+        draw_status_icon_box(69, 55, 9, 9, interrupt_in_data[9] & 0x04);
+
+        // L2/R2 analog bars already show travel; invert them as well when the
+        // digital trigger bit is set.
+        if (b8 & 0x04) rect_invert(kContentX + 32, 33, 4, 29);
+        if (b8 & 0x08) rect_invert(92, 33, 4, 29);
     } else {
         if (ui_hebrew()) {
             draw_hebrew_r(126, 14, "לצימוד שלט חדש");
@@ -1799,44 +1891,31 @@ __attribute__((noinline)) void render_screen_vu() {
 
 // ---- Help screen ---------------------------------------------------------
 
-const char* const kHelpLinesEn[] = {
-    "KEY0/KEY1: screens",
-    "Opt+DPad L/R:",
-    "  screens from pad",
-    "DPad U/D: menu",
-    "DPad L/R: change",
-    "!SAVE",
-    "PS+Options: poweroff",
-    "AudioKeep: no Idle",
-    "  while audio plays",
-    "Create+PS: pair pad",
-    "  wait blue flash",
+// Compact quick guide. Each row is now "action: button" instead of
+// "button: action", and every topic starts with a small bullet so the split
+// between items stays clear on the 128x64 OLED.
+enum HelpButtonKind : uint8_t { HelpButtonText, HelpButtonTriangle };
+struct HelpItem {
+    const char *en_action;
+    const char *en_button;
+    const char *he_action;
+    const char *he_button;
+    HelpButtonKind kind;
 };
 
-const char* const kHelpLinesHe[] = {
-    "@KEY0 / KEY1:",
-    "מעבר מסכים",
-    "@Options + D-Pad:",
-    "מעבר עם השלט",
-    "@D-Pad Up/Down:",
-    "גלילה בתפריט",
-    "@D-Pad Left/Right:",
-    "שינוי ערך",
-    "!SAVE",
-    "@PS + Options:",
-    "כיבוי שלט",
-    "אודיו מעיר:",
-    "לא מכבה ב-Idle",
-    "כשיש אודיו",
-    "@Create + PS:",
-    "צימוד שלט חדש",
-    "המתן להבהוב כחול",
+const HelpItem kHelpItems[] = {
+    {"Screens",  "KEY0/K1",       "מסכים",      "KEY0/K1",       HelpButtonText},
+    {"Pad nav",  "Opt+DPad L/R",  "מסך",       "Opt+D L/R",     HelpButtonText},
+    {"Scroll",   "DPad U/D",      "גלילה",      "DPad U/D",      HelpButtonText},
+    {"Change",   "DPad L/R",      "שינוי",      "DPad L/R",      HelpButtonText},
+    {"Save",     "",              "שמירה",      "",              HelpButtonTriangle},
+    {"Power off","PS+Options",    "כיבוי",      "PS+Opt",        HelpButtonText},
+    {"No idle",  "AudioKeep",     "בלי כיבוי",  "AudioKeep",     HelpButtonText},
+    {"Pair pad", "Create+PS",     "צימוד",      "Create+PS",     HelpButtonText},
 };
 
 int help_line_count() {
-    return ui_hebrew()
-        ? (int)(sizeof(kHelpLinesHe) / sizeof(kHelpLinesHe[0]))
-        : (int)(sizeof(kHelpLinesEn) / sizeof(kHelpLinesEn[0]));
+    return (int)(sizeof(kHelpItems) / sizeof(kHelpItems[0]));
 }
 
 void help_clamp_scroll() {
@@ -1871,28 +1950,34 @@ void help_handle_input() {
     help_last_dpad = dpad;
 }
 
-void draw_help_line_en(const char *line, int y) {
-    if (strcmp(line, "!SAVE") == 0) {
-        draw_tri_icon(kContentX, y + 1);
-        draw_text(kContentX + 10, y, ": save");
-        return;
+void draw_help_item_en(const HelpItem &it, int y) {
+    draw_bullet_dot(kContentX, y);
+    int x = kContentX + 6;
+    draw_text(x, y, it.en_action);
+    x += (int)strlen(it.en_action) * 6;
+    draw_text(x, y, ":");
+    x += 6;
+    if (it.kind == HelpButtonTriangle) {
+        draw_tri_icon(x + 1, y + 1);
+    } else {
+        draw_text(x, y, it.en_button);
     }
-    draw_text(kContentX, y, line);
 }
 
-void draw_help_line_he(const char *line, int y) {
-    if (strcmp(line, "!SAVE") == 0) {
-        // Triangle is the setting, the colon separates it from the explanation.
-        draw_tri_icon(78, y + 1);
-        draw_text(88, y, ":");
-        draw_hebrew_r(126, y, "שמירה");
-        return;
+void draw_help_item_he(const HelpItem &it, int y) {
+    // RTL layout: bullet | Hebrew action | ':' | ASCII/icon button to the left.
+    draw_bullet_dot(123, y);
+    const int action_right = 118;
+    draw_hebrew_r(action_right, y, it.he_action);
+    const int action_w = hebrew_text_width(it.he_action);
+    const int colon_x = action_right - action_w - 5;
+    draw_text(colon_x, y, ":");
+    if (it.kind == HelpButtonTriangle) {
+        draw_tri_icon(colon_x - 10, y + 1);
+    } else {
+        const int button_w = (int)strlen(it.he_button) * 6;
+        draw_text(colon_x - button_w - 2, y, it.he_button);
     }
-    if (line[0] == '@') {
-        draw_text(kContentX, y, line + 1);
-        return;
-    }
-    draw_hebrew_r(126, y, line);
 }
 
 __attribute__((noinline)) void render_screen_help() {
@@ -1923,8 +2008,8 @@ __attribute__((noinline)) void render_screen_help() {
         const int idx = help_scroll + i;
         if (idx >= count) break;
         const int y = 10 + i * 10;
-        if (ui_hebrew()) draw_help_line_he(kHelpLinesHe[idx], y);
-        else draw_help_line_en(kHelpLinesEn[idx], y);
+        if (ui_hebrew()) draw_help_item_he(kHelpItems[idx], y);
+        else             draw_help_item_en(kHelpItems[idx], y);
     }
 
     flush_fb();
@@ -2039,19 +2124,28 @@ void format_remap_item(int idx, char* line, size_t n) {
     else                            snprintf(line, n, "%s %s=%s", cur, kRemapNames[src], kRemapNames[tgt % kRemapCount]);
 }
 
-// Render Remap rows directly so face buttons appear as symbols rather than
-// words.  This applies to both English and Hebrew UI modes.
+// Render Remap rows directly so D-pad and face buttons appear as symbols
+// rather than UP/DOWN/LEFT/RIGHT words.  This applies to both English and
+// Hebrew UI modes.
 static bool remap_is_face_idx(int idx) {
     return idx == 11 || idx == 12 || idx == 13 || idx == 14; // Triangle/Circle/Cross/Square
 }
 
+static bool remap_is_dpad_idx(int idx) {
+    return idx == 3 || idx == 4 || idx == 5 || idx == 6; // Up/Left/Down/Right
+}
+
 static int remap_label_width_px(int idx) {
-    if (remap_is_face_idx(idx)) return 8;
+    if (remap_is_face_idx(idx) || remap_is_dpad_idx(idx)) return 8;
     return (int)strlen(kRemapNames[idx]) * 6;
 }
 
 static void draw_remap_label(int x, int y, int idx) {
     switch (idx) {
+        case 3:  draw_arrow_icon(x, y, 'U'); break;
+        case 4:  draw_arrow_icon(x, y, 'L'); break;
+        case 5:  draw_arrow_icon(x, y, 'D'); break;
+        case 6:  draw_arrow_icon(x, y, 'R'); break;
         case 11: draw_tri_icon(x, y + 1); break;
         case 12: draw_circle_icon(x, y); break;
         case 13: draw_cross_icon(x, y); break;
@@ -2629,8 +2723,8 @@ __attribute__((noinline)) void render_screen_slots() {
     if (ui_hebrew()) {
         draw_hebrew_r(126, 56, "החלף");
         draw_tri_icon(90, 57);
-        draw_hebrew_r(70, 56, "מחק");
-        draw_square_icon(42, 57);
+        draw_hebrew_r(78, 56, "מחק");
+        draw_square_icon(44, 57);
     } else {
         draw_tri_icon(kContentX, 57);
         draw_text(kContentX + 10, 56, "=switch");

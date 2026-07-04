@@ -88,7 +88,7 @@ Adds an optional Hebrew OLED user interface. The default language remains Englis
 
 
 ### OLED polish note
-The 1.0.5 OLED UI uses button symbols in the Remap screen where possible, in both English and Hebrew UI modes.
+The 1.0.5 OLED UI uses button symbols in the Remap screen where possible, including arrow symbols for D-pad directions. The Help screen now lists `action: button` items with bullets, and the Status screen uses D-pad arrows plus PlayStation-style button symbols instead of generic square indicators.
 
 ## Persistent settings note
 
