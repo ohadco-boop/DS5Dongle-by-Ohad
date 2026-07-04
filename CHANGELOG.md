@@ -1,5 +1,14 @@
 ## 1.0.5 - Fast looping Help scroll
 
+
+## 1.0.5 OLED polish — status/help/i18n
+- Status screen: moved Triangle/Circle/Cross/Square icons 2 px right relative to the D-pad arrows.
+- Status screen: moved the PS indicator 4 px right.
+- Slots screen Hebrew footer: moved the Triangle icon 2 px left near the switch label.
+- BT Signal screen: localized Hebrew UI while keeping the RSSI line in English.
+- Touchpad screen: localized the Fingers label in Hebrew.
+- Trigger Test screen: localized mode/footer text in Hebrew and removed the Hebrew "hold" wording.
+- Hebrew help: fixed mixed Hebrew/English spacing so English terms do not visually attach to the following Hebrew word.
 - Holding D-Pad Up or Down on the Help screen now auto-scrolls quickly instead of moving only one row per press.
 - Help scrolling now wraps: moving down past the end returns to the start, and moving up above the start jumps to the end.
 - The behavior is local to Help and does not affect Settings, Slots, or Remap navigation.

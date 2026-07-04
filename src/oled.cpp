@@ -547,7 +547,10 @@ void draw_hebrew_char_left(int x, int y, uint32_t cp) {
 }
 
 bool hebrew_is_ascii_run_char(uint32_t cp) {
-    return cp >= 0x20 && cp <= 0x7E;
+    // Treat spaces as neutral RTL separators, not as part of an ASCII run.
+    // This keeps mixed Hebrew/English help lines from attaching the Hebrew
+    // word to the English term when the run is drawn right-aligned.
+    return cp >= 0x21 && cp <= 0x7E;
 }
 
 int hebrew_run_width(const uint32_t *cps, int first, int last) {
@@ -558,8 +561,8 @@ int hebrew_run_width(const uint32_t *cps, int first, int last) {
 
 // Draw a Hebrew string right-aligned. Hebrew glyph order is rendered from
 // right to left; ASCII runs such as KEY1, PS+Options, HOST or AutoHap are drawn
-// left-to-right inside their reserved width so mixed Hebrew/English help lines
-// stay readable.
+// left-to-right inside their reserved width. Spaces stay neutral between runs so
+// mixed Hebrew/English help lines keep a visible gap in the correct place.
 void draw_hebrew_r(int right_x, int y, const char *s) {
     const char *p = s;
     uint32_t cps[64];
@@ -1237,7 +1240,7 @@ __attribute__((noinline)) void render_screen() {
             else                draw_square_icon(x, y);
             draw_status_icon_box(x - 1, y - 1, 9, 9, on);
         };
-        const int fcx = 72, fcy = 45;
+        const int fcx = 74, fcy = 45;
         face_icon(fcx,     fcy - 11, 0, b7 & 0x80); // Triangle
         face_icon(fcx + 9, fcy - 2,  1, b7 & 0x40); // Circle
         face_icon(fcx,     fcy + 7,  2, b7 & 0x20); // Cross
@@ -1255,8 +1258,8 @@ __attribute__((noinline)) void render_screen() {
         draw_status_icon_box(76, 26, 9, 9, b8 & 0x20);
         draw_status_text_button(85, 27, "R1", b8 & 0x02);
 
-        draw_ps_text_icon(54, 56);
-        draw_status_icon_box(53, 55, 14, 9, interrupt_in_data[9] & 0x01);
+        draw_ps_text_icon(58, 56);
+        draw_status_icon_box(57, 55, 14, 9, interrupt_in_data[9] & 0x01);
 
         // L2/R2 analog bars already show travel. Keep them white-on-black even
         // when the digital trigger bit is set; do not invert the trigger bars.
@@ -1285,24 +1288,35 @@ __attribute__((noinline)) void render_screen_rssi() {
         bt_get_signal_strength(&rssi);
         char buf[24];
         snprintf(buf, sizeof(buf), "RSSI: %d dBm", (int)rssi);
-        draw_text(kContentX, 12, buf);
+        draw_text(kContentX, 12, buf);  // Keep RSSI line in English by request.
 
         // Map RSSI range -90..-40 dBm to 0..100% bar
         int pct = ((int)rssi + 90) * 100 / 50;
         if (pct < 0) pct = 0;
         if (pct > 100) pct = 100;
-        snprintf(buf, sizeof(buf), "Quality: %d%%", pct);
-        draw_text(kContentX, 22, buf);
+        if (ui_hebrew()) {
+            snprintf(buf, sizeof(buf), "איכות: %d%%", pct);
+            draw_hebrew_r(126, 22, buf);
+        } else {
+            snprintf(buf, sizeof(buf), "Quality: %d%%", pct);
+            draw_text(kContentX, 22, buf);
+        }
         rect_outline(kContentX, 34, 122, 10);
         int fill = (pct * 118) / 100;
         if (fill > 0) rect_filled(kContentX + 2, 36, fill, 6);
 
         const char *label = "Poor";
-        if (rssi > -55) label = "Excellent";
-        else if (rssi > -65) label = "Good";
-        else if (rssi > -75) label = "Fair";
-        snprintf(buf, sizeof(buf), "Link: %s", label);
-        draw_text(kContentX, 48, buf);
+        const char *label_he = "חלש";
+        if (rssi > -55) { label = "Excellent"; label_he = "מצוין"; }
+        else if (rssi > -65) { label = "Good"; label_he = "טוב"; }
+        else if (rssi > -75) { label = "Fair"; label_he = "סביר"; }
+        if (ui_hebrew()) {
+            snprintf(buf, sizeof(buf), "קישור: %s", label_he);
+            draw_hebrew_r(126, 48, buf);
+        } else {
+            snprintf(buf, sizeof(buf), "Link: %s", label);
+            draw_text(kContentX, 48, buf);
+        }
     } else {
         draw_no_controller(kContentX, 30);
     }
@@ -1474,8 +1488,14 @@ __attribute__((noinline)) void render_screen_triggers() {
     draw_title("Trigger Test", "בדיקת טריגר");
 
     char buf[24];
-    snprintf(buf, sizeof(buf), "Mode: %s", kTrigPresetNames[trigger_preset]);
-    draw_text(kContentX, 12, buf);
+    if (ui_hebrew()) {
+        const char* const he_names[] = {"כבוי", "משוב", "נשק", "רטט", "קשת", "דהירה", "מכונה"};
+        snprintf(buf, sizeof(buf), "מצב: %s", he_names[trigger_preset]);
+        draw_hebrew_r(126, 12, buf);
+    } else {
+        snprintf(buf, sizeof(buf), "Mode: %s", kTrigPresetNames[trigger_preset]);
+        draw_text(kContentX, 12, buf);
+    }
 
     if (bt_is_connected()) {
         const uint8_t l2 = interrupt_in_data[4];
@@ -1493,7 +1513,12 @@ __attribute__((noinline)) void render_screen_triggers() {
         draw_no_controller(kContentX, 24);
     }
 
-    if (ui_hebrew()) draw_tri_footer_he_hold("מחליף"); else draw_tri_footer_en(kContentX, 56, "=cycle");
+    if (ui_hebrew()) {
+        draw_hebrew_r(126, 56, "מחליף");
+        draw_tri_icon(88, 57);
+    } else {
+        draw_tri_footer_en(kContentX, 56, "=cycle");
+    }
     flush_fb();
 }
 
@@ -1644,8 +1669,13 @@ __attribute__((noinline)) void render_screen_touchpad() {
             active++;
         }
         char buf[20];
-        snprintf(buf, sizeof(buf), "Fingers: %d", active);
-        draw_text(kContentX, 46, buf);
+        if (ui_hebrew()) {
+            snprintf(buf, sizeof(buf), "אצבעות: %d", active);
+            draw_hebrew_r(126, 46, buf);
+        } else {
+            snprintf(buf, sizeof(buf), "Fingers: %d", active);
+            draw_text(kContentX, 46, buf);
+        }
     } else {
         draw_no_controller(kContentX, 30);
     }
@@ -3001,7 +3031,7 @@ __attribute__((noinline)) void render_screen_slots() {
 
     if (ui_hebrew()) {
         draw_hebrew_r(126, 56, "החלף");
-        draw_tri_icon(90, 57);
+        draw_tri_icon(88, 57);
         draw_hebrew_r(78, 56, "מחק");
         draw_square_icon(44, 57);
     } else {
