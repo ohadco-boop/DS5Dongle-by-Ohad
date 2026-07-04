@@ -88,7 +88,7 @@ Adds an optional Hebrew OLED user interface. The default language remains Englis
 
 
 ### OLED polish note
-The 1.0.5 OLED UI uses button symbols in the Remap screen where possible, including arrow symbols for D-pad directions. The Help screen now lists `action: button` items with bullets, and the Status screen uses D-pad arrows plus PlayStation-style button symbols instead of generic square indicators.
+The 1.0.5 OLED UI uses button symbols in the Remap screen where possible, including arrow symbols for D-pad directions. The Help screen now acts as an extended scrollable on-device guide with roughly 70 `action: button/detail` rows and bullets. The Status screen uses D-pad arrows plus PlayStation-style button symbols, omits the Mute indicator for a cleaner layout, and shows L1/R1 as equal text labels.
 
 ## Persistent settings note
 
@@ -97,4 +97,4 @@ Version 1.0.5 now stores OLED Settings in a safe app-owned flash sector instead 
 
 ## OLED Help Screen
 
-Firmware 1.0.5 includes a built-in **Help** screen on the OLED, placed immediately after Status and before Slots. It summarizes the basic controls: KEY0/KEY1 screen navigation, Options + D-pad screen navigation from the controller, D-pad menu scrolling, Triangle save, PS + Options controller power-off, AudioKeep behavior, and controller pairing. The Help screen is read-only and does not change settings.
+Firmware 1.0.5 includes a built-in **Help** screen on the OLED, placed immediately after Status and before Slots. It is now a fuller scrollable guide with many short rows covering screen navigation, pairing, power-off, Status indicators, Slots, Lightbar, Triggers, Gyro, Touchpad, BT Signal, VU, Remap, and Settings. The Help screen is read-only and does not change settings.

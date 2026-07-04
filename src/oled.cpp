@@ -701,6 +701,14 @@ void draw_ps_text_icon(int x, int y) {
     draw_text(x, y, "PS");
 }
 
+void draw_status_text_button(int x, int y, const char *label, bool pressed) {
+    draw_text(x, y, label);
+    if (pressed) {
+        const int w = (int)strlen(label) * 6 + 2;
+        rect_invert(x - 1, y - 1, w, 9);
+    }
+}
+
 void draw_tri_footer_en(int x, int y, const char *suffix) {
     draw_tri_icon(x, y + 1);
     draw_text(x + 10, y, suffix);
@@ -1170,7 +1178,9 @@ __attribute__((noinline)) void render_screen() {
         const uint8_t b8 = interrupt_in_data[8];
 
         // D-pad indicator with real arrows instead of generic squares.
-        // Primary and diagonal presses light the relevant arrow boxes.
+        // Primary and diagonal presses light the relevant arrow boxes.  The
+        // whole center cluster is shifted a few pixels left to better balance
+        // the freed OLED column and keep the PS label away from Cross.
         const int dp = b7 & 0x0F;
         const bool dp_n = (dp == 7 || dp == 0 || dp == 1);
         const bool dp_e = (dp == 1 || dp == 2 || dp == 3);
@@ -1180,14 +1190,14 @@ __attribute__((noinline)) void render_screen() {
             draw_arrow_icon(x, y, dir);
             draw_status_icon_box(x - 1, y - 1, 9, 9, on);
         };
-        const int dcx = 50, dcy = 45;
+        const int dcx = 46, dcy = 45;
         dpad_icon(dcx,     dcy - 11, 'U', dp_n);
         dpad_icon(dcx + 9, dcy - 2,  'R', dp_e);
         dpad_icon(dcx,     dcy + 7,  'D', dp_s);
         dpad_icon(dcx - 9, dcy - 2,  'L', dp_w);
 
-        // Face buttons now use the real PlayStation symbols instead of four
-        // identical boxes. Pressed buttons are inverted so they pop clearly.
+        // Face buttons use real PlayStation symbols. Pressed buttons are
+        // inverted so they pop clearly.
         auto face_icon = [&](int x, int y, int kind, bool on) {
             if      (kind == 0) draw_tri_icon(x, y + 1);
             else if (kind == 1) draw_circle_icon(x, y);
@@ -1195,31 +1205,26 @@ __attribute__((noinline)) void render_screen() {
             else                draw_square_icon(x, y);
             draw_status_icon_box(x - 1, y - 1, 9, 9, on);
         };
-        const int fcx = 76, fcy = 45;
+        const int fcx = 72, fcy = 45;
         face_icon(fcx,     fcy - 11, 0, b7 & 0x80); // Triangle
         face_icon(fcx + 9, fcy - 2,  1, b7 & 0x40); // Circle
         face_icon(fcx,     fcy + 7,  2, b7 & 0x20); // Cross
         face_icon(fcx - 9, fcy - 2,  3, b7 & 0x10); // Square
 
-        // Shoulder / system buttons.  These were partly missing from Status;
-        // keep them tiny so all controls fit between the stick boxes.
-        // L1/R1 as compact shoulder bars.
-        rect_outline(38, 28, 9, 3);
-        if (b8 & 0x01) rect_invert(38, 28, 9, 3);
-        rect_outline(86, 28, 6, 3);
-        if (b8 & 0x02) rect_invert(86, 28, 6, 3);
+        // Shoulder / system buttons. L1/R1 are now shown as equal text labels
+        // instead of uneven bars. Mute is intentionally omitted from Status to
+        // keep the lower center clean.
+        draw_status_text_button(37, 27, "L1", b8 & 0x01);
+        draw_create_icon(51, 27);
+        draw_status_icon_box(50, 26, 9, 9, b8 & 0x10);
+        draw_touchpad_icon(61, 27);
+        draw_status_icon_box(60, 26, 15, 9, interrupt_in_data[9] & 0x02);
+        draw_options_icon(77, 27);
+        draw_status_icon_box(76, 26, 9, 9, b8 & 0x20);
+        draw_status_text_button(85, 27, "R1", b8 & 0x02);
 
-        draw_create_icon(52, 27);
-        draw_status_icon_box(51, 26, 9, 9, b8 & 0x10);
-        draw_touchpad_icon(62, 27);
-        draw_status_icon_box(61, 26, 15, 9, interrupt_in_data[9] & 0x02);
-        draw_options_icon(78, 27);
-        draw_status_icon_box(77, 26, 9, 9, b8 & 0x20);
-
-        draw_ps_text_icon(58, 56);
-        draw_status_icon_box(57, 55, 14, 9, interrupt_in_data[9] & 0x01);
-        draw_mute_icon(70, 56);
-        draw_status_icon_box(69, 55, 9, 9, interrupt_in_data[9] & 0x04);
+        draw_ps_text_icon(54, 56);
+        draw_status_icon_box(53, 55, 14, 9, interrupt_in_data[9] & 0x01);
 
         // L2/R2 analog bars already show travel; invert them as well when the
         // digital trigger bit is set.
@@ -1891,9 +1896,9 @@ __attribute__((noinline)) void render_screen_vu() {
 
 // ---- Help screen ---------------------------------------------------------
 
-// Compact quick guide. Each row is now "action: button" instead of
-// "button: action", and every topic starts with a small bullet so the split
-// between items stays clear on the 128x64 OLED.
+// Built-in scroll guide.  It is intentionally long enough to replace the
+// external manual for everyday use.  Rows stay in "action: button/detail"
+// order and each one starts with a bullet for easier separation on 128x64 OLED.
 enum HelpButtonKind : uint8_t { HelpButtonText, HelpButtonTriangle };
 struct HelpItem {
     const char *en_action;
@@ -1904,14 +1909,81 @@ struct HelpItem {
 };
 
 const HelpItem kHelpItems[] = {
-    {"Screens",  "KEY0/K1",       "מסכים",      "KEY0/K1",       HelpButtonText},
-    {"Pad nav",  "Opt+DPad L/R",  "מסך",       "Opt+D L/R",     HelpButtonText},
-    {"Scroll",   "DPad U/D",      "גלילה",      "DPad U/D",      HelpButtonText},
-    {"Change",   "DPad L/R",      "שינוי",      "DPad L/R",      HelpButtonText},
-    {"Save",     "",              "שמירה",      "",              HelpButtonTriangle},
-    {"Power off","PS+Options",    "כיבוי",      "PS+Opt",        HelpButtonText},
-    {"No idle",  "AudioKeep",     "בלי כיבוי",  "AudioKeep",     HelpButtonText},
-    {"Pair pad", "Create+PS",     "צימוד",      "Create+PS",     HelpButtonText},
+    {"Next screen", "KEY1",          "מסך הבא",       "KEY1",        HelpButtonText},
+    {"Prev screen", "KEY0",          "מסך קודם",      "KEY0",        HelpButtonText},
+    {"Scr nav",     "Opt+D L/R",     "ניווט מסך",     "Opt+D L/R",   HelpButtonText},
+    {"Help scroll", "D U/D",         "גלילת עזרה",    "D U/D",       HelpButtonText},
+    {"Menu scroll", "D U/D",         "גלילת תפריט",   "D U/D",       HelpButtonText},
+    {"Change val",  "D L/R",         "שינוי ערך",     "D L/R",       HelpButtonText},
+    {"Save edits",  "",              "שמירת שינוי",   "",            HelpButtonTriangle},
+    {"Back status", "KEY0/K1",       "חזרה לסטטוס",   "KEY0/K1",     HelpButtonText},
+    {"Reboot",      "KEY0+KEY1",     "הפעלה מחדש",    "KEY0+KEY1",   HelpButtonText},
+    {"Pair pad",    "Create+PS",     "צימוד שלט",     "Create+PS",   HelpButtonText},
+    {"Power off",   "PS+Opt",        "כיבוי שלט",     "PS+Opt",      HelpButtonText},
+    {"Wake OLED",   "any input",     "הערת מסך",      "any input",   HelpButtonText},
+    {"CtrlWake",    "pad input",     "הערה משלט",     "pad input",   HelpButtonText},
+    {"Dim OLED",    "ScrDim",        "עמעום מסך",     "ScrDim",      HelpButtonText},
+    {"Off OLED",    "ScrOff",        "כיבוי מסך",     "ScrOff",      HelpButtonText},
+    {"Rotate OLED", "OLED Rot",      "סיבוב מסך",     "OLED Rot",    HelpButtonText},
+    {"Brightness",  "OLED Bright",   "בהירות",        "OLED Bright", HelpButtonText},
+    {"Quick bright","KEY1 hold",     "בהירות מהירה",  "KEY1 hold",   HelpButtonText},
+
+    {"Status",      "live pad",      "סטטוס",         "live pad",    HelpButtonText},
+    {"Battery",     "% + icon",      "סוללה",         "% + icon",    HelpButtonText},
+    {"BT address",  "MAC",           "כתובת",         "BT MAC",         HelpButtonText},
+    {"Stick move",  "dots",          "סטיקים",        "dots",        HelpButtonText},
+    {"L3/R3",       "box invert",    "לחיצת סטיק",    "box invert",  HelpButtonText},
+    {"L2/R2",       "bars",          "טריגרים",       "bars",        HelpButtonText},
+    {"D-Pad",       "arrows",        "חצים",          "arrows",      HelpButtonText},
+    {"Face btns",   "symbols",       "כפתורי פעולה",  "symbols",     HelpButtonText},
+    {"L1/R1",       "text labels",   "כתפיים",        "L1/R1",       HelpButtonText},
+    {"Create",      "small icon",    "קריאייט",       "small icon",  HelpButtonText},
+    {"Options",     "menu icon",     "אופציות",       "menu icon",   HelpButtonText},
+    {"Touchpad",    "pad icon",      "משטח מגע",      "pad icon",    HelpButtonText},
+    {"PS",          "PS label",      "כפתור",         "PS label",    HelpButtonText},
+
+    {"Slots",       "pair memory",   "סלוטים",        "memory",      HelpButtonText},
+    {"Pick slot",   "D U/D",         "בחירת סלוט",    "D U/D",       HelpButtonText},
+    {"Active slot", "*",             "סלוט פעיל",     "*",           HelpButtonText},
+    {"Switch slot", "Triangle",      "החלפת סלוט",    "Triangle",    HelpButtonText},
+    {"Delete slot", "Square hold",   "מחיקת סלוט",    "Square hold", HelpButtonText},
+    {"Empty slot",  "no MAC",        "סלוט ריק",      "no MAC",      HelpButtonText},
+
+    {"Lightbar",    "LED screen",    "תאורה",         "LED screen",  HelpButtonText},
+    {"LED mode",    "R1",            "מצב תאורה",     "R1",          HelpButtonText},
+    {"HOST LED",    "console color", "תאורת מארח",    "host color",  HelpButtonText},
+    {"BATT LED",    "battery color", "תאורת סוללה",   "batt color",  HelpButtonText},
+    {"Triggers",    "L2/R2 view",    "מסך טריגרים",   "L2/R2 view",  HelpButtonText},
+    {"Gyro",        "motion view",   "מסך גיירו",     "motion view", HelpButtonText},
+    {"Touch view",  "finger pos",    "מסך מגע",       "finger pos",  HelpButtonText},
+    {"BT Signal",   "RSSI dBm",      "אות בלוטות",    "RSSI dBm",    HelpButtonText},
+    {"VU",          "audio level",   "עוצמת שמע",    "audio level", HelpButtonText},
+
+    {"Remap",       "USB mapping",   "מיפוי",         "USB map",     HelpButtonText},
+    {"Remap ON",    "first row",     "מיפוי פעיל",    "first row",   HelpButtonText},
+    {"Pick source", "D U/D",         "בחירת מקור",    "D U/D",       HelpButtonText},
+    {"Pick target", "D L/R",         "בחירת יעד",     "D L/R",       HelpButtonText},
+    {"Disable btn", "Off target",    "ביטול כפתור",   "Off target",  HelpButtonText},
+    {"Pico mic",    "Mute->PicoMic", "מיק פיקו",      "Mute>Pico",   HelpButtonText},
+    {"Reset remap", "Reset row",     "איפוס מיפוי",   "Reset row",   HelpButtonText},
+    {"Save remap",  "",              "שמירת מיפוי",   "",            HelpButtonTriangle},
+
+    {"Language",    "HE/EN",         "שפה",           "HE/EN",       HelpButtonText},
+    {"Ctrl type",   "DS5/DSE/Auto",  "סוג שלט",       "DS5/DSE/Auto",HelpButtonText},
+    {"Polling",     "250/500/RT",    "קצב דגימה",     "250/500/RT",  HelpButtonText},
+    {"Idle",        "off/min",       "כיבוי אוטו",    "off/min",     HelpButtonText},
+    {"AudioKeep",   "no idle",       "אודיו מעיר",    "no idle",     HelpButtonText},
+    {"Spk Vol",     "speaker",       "רמקול",         "speaker",     HelpButtonText},
+    {"Mic Gain",    "+/- dB",        "מיקרופון",      "+/- dB",      HelpButtonText},
+    {"BT Mic",      "on/off",        "מיק בלוטות",    "on/off",      HelpButtonText},
+    {"AudBuf",      "latency",       "חוצץ שמע",      "latency",     HelpButtonText},
+    {"Hap Gain",    "rumble",        "עוצמת רטט",     "rumble",      HelpButtonText},
+    {"AutoHap",     "audio rumble",  "רטט שמע",       "audio rumble",HelpButtonText},
+    {"AH Gain",     "auto level",    "עוצמת אוטו",   "auto level",  HelpButtonText},
+    {"AH LP",       "low pass",      "סינון אוטו",    "low pass",    HelpButtonText},
+    {"Pico LED",    "on/off",        "נורת פיקו",     "on/off",      HelpButtonText},
+    {"Wipe slots",  "Triangle hold", "מחיקת סלוטים",  "Tri hold",    HelpButtonText},
+    {"Reset all",   "Triangle hold", "איפוס הגדרות",  "Tri hold",    HelpButtonText},
 };
 
 int help_line_count() {
