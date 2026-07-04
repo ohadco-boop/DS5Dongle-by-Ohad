@@ -1,3 +1,9 @@
+## 1.0.5 - Fast looping Help scroll
+
+- Holding D-Pad Up or Down on the Help screen now auto-scrolls quickly instead of moving only one row per press.
+- Help scrolling now wraps: moving down past the end returns to the start, and moving up above the start jumps to the end.
+- The behavior is local to Help and does not affect Settings, Slots, or Remap navigation.
+
 ## 1.0.5 - Manual-style Help and Status trigger polish
 
 - Reworked the OLED Help screen from a short shortcut list into a long built-in manual with detailed scrollable explanations for navigation, pairing, Status, Slots, Lightbar, Triggers, Gyro, Touchpad, BT Signal, VU, Remap, and Settings options.

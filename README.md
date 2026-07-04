@@ -97,4 +97,4 @@ Version 1.0.5 now stores OLED Settings in a safe app-owned flash sector instead 
 
 ## OLED Help Screen
 
-Firmware 1.0.5 includes a built-in **Help** screen on the OLED, placed immediately after Status and before Slots. It is now a fuller scrollable guide with many short rows covering screen navigation, pairing, power-off, Status indicators, Slots, Lightbar, Triggers, Gyro, Touchpad, BT Signal, VU, Remap, and Settings. The Help screen is read-only and does not change settings.
+Firmware 1.0.5 includes a built-in **Help** screen on the OLED, placed immediately after Status and before Slots. It is now a fuller scrollable guide with many short rows covering screen navigation, pairing, power-off, Status indicators, Slots, Lightbar, Triggers, Gyro, Touchpad, BT Signal, VU, Remap, and Settings. The Help screen is read-only and does not change settings. Hold D-Pad Up/Down to auto-scroll quickly; the viewport wraps from the end back to the start and from the start to the end.

@@ -301,9 +301,14 @@ void service_save_status_timeouts() {
 
 // Help screen: built-in manual-style guide. It is deliberately read-only and
 // uses only controller D-pad Up/Down for scrolling, so it never changes runtime
-// state or touches flash/audio paths.
+// state or touches flash/audio paths. Holding Up/Down auto-scrolls, and the
+// viewport wraps from the last help page back to the first page and vice versa.
 int help_scroll = 0;
 uint8_t help_last_dpad = 8;
+uint8_t help_repeat_dpad = 8;
+uint32_t help_next_repeat_us = 0;
+constexpr uint32_t kHelpRepeatStartUs = 400000; // first repeat after 0.4 s
+constexpr uint32_t kHelpRepeatEveryUs = 100000; // then one row per OLED frame
 
 
 // Factory-reset hold-Triangle-2s state. Borrowed from zurce/DS5Dongle-OLED's
@@ -2155,35 +2160,73 @@ int help_line_count() {
     return (int)(sizeof(kHelpLines) / sizeof(kHelpLines[0]));
 }
 
-void help_clamp_scroll() {
+int help_max_scroll() {
     constexpr int kVisible = 5;
     const int count = help_line_count();
-    const int max_scroll = (count > kVisible) ? (count - kVisible) : 0;
+    return (count > kVisible) ? (count - kVisible) : 0;
+}
+
+void help_clamp_scroll() {
+    const int max_scroll = help_max_scroll();
     if (help_scroll < 0) help_scroll = 0;
     if (help_scroll > max_scroll) help_scroll = max_scroll;
+}
+
+void help_wrap_scroll() {
+    const int max_scroll = help_max_scroll();
+    if (max_scroll <= 0) { help_scroll = 0; return; }
+    if (help_scroll < 0) help_scroll = max_scroll;
+    else if (help_scroll > max_scroll) help_scroll = 0;
+}
+
+void help_scroll_step(int delta) {
+    help_scroll += delta;
+    help_wrap_scroll();
+    last_activity_us = time_us_64();
+    last_render_us = 0;
+}
+
+void help_reset_repeat() {
+    help_repeat_dpad = 8;
+    help_next_repeat_us = 0;
 }
 
 void help_handle_input() {
     if (!bt_is_connected()) {
         help_last_dpad = 8;
+        help_reset_repeat();
         return;
     }
+
     const uint8_t dpad = (uint8_t)(interrupt_in_data[7] & 0x0F);
     if (controller_screen_nav_combo_active()) {
         help_last_dpad = dpad;
+        help_reset_repeat();
         return;
     }
+
+    const bool scroll_dpad = (dpad == 0 || dpad == 4); // Up / Down
+    const uint32_t now = (uint32_t)time_us_32();
+
     if (dpad != help_last_dpad) {
-        if (dpad == 0) { // Up
-            help_scroll--;
-            last_activity_us = time_us_64();
-        } else if (dpad == 4) { // Down
-            help_scroll++;
-            last_activity_us = time_us_64();
+        if (scroll_dpad) {
+            help_scroll_step(dpad == 4 ? +1 : -1);
+            help_repeat_dpad = dpad;
+            help_next_repeat_us = now + kHelpRepeatStartUs;
+        } else {
+            help_reset_repeat();
         }
-        help_clamp_scroll();
-        last_render_us = 0;
+        help_last_dpad = dpad;
+        return;
     }
+
+    if (scroll_dpad && dpad == help_repeat_dpad
+        && (int32_t)(now - help_next_repeat_us) >= 0) {
+        help_scroll_step(dpad == 4 ? +1 : -1);
+        help_next_repeat_us = now + kHelpRepeatEveryUs;
+    }
+
+    if (!scroll_dpad) help_reset_repeat();
     help_last_dpad = dpad;
 }
 
