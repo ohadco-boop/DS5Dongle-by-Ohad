@@ -1,4 +1,5 @@
 # DS5Dongle by Ohad v1.0.5
+- בתפריט OLED ההגדרה AudBuf מוסתרת ונשארת פנימית/קבועה; היא לא מופיעה ב־Settings או במסך Help.
 
 
 ## שפה

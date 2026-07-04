@@ -189,7 +189,7 @@ constexpr int kLbModeBattery = 9;
 constexpr int kNumLbModes = 10;
 
 // Settings screen state
-constexpr int kNumSettingsItems = 22; // fixed65u: InactDC removed; Idle includes Off/1/2/3/5/10/20/30
+constexpr int kNumSettingsItems = 21; // visible Settings rows; AudBuf stays internal/fixed for config compatibility
 // Stable item IDs.  These stay mapped to the saved Config_body fields; the
 // visible menu order is controlled by kSettingsOrder below.
 constexpr int kSettingsHapticsGainIdx = 0;
@@ -227,7 +227,6 @@ constexpr int kSettingsOrder[kNumSettingsItems] = {
     kSettingsSpeakerVolIdx,
     kSettingsMicGainIdx,
     kSettingsBtMicIdx,
-    kSettingsAudioBufferIdx,
 
     kSettingsHapticsGainIdx,
     kSettingsAutoHapEnaIdx,
@@ -1514,8 +1513,12 @@ __attribute__((noinline)) void render_screen_triggers() {
     }
 
     if (ui_hebrew()) {
-        draw_hebrew_r(126, 56, "מחליף");
-        draw_tri_icon(88, 57);
+        const char *txt = "מחליף";
+        draw_hebrew_r(126, 56, txt);
+        // Keep the triangle before the Hebrew action label, with a clear gap.
+        // The word is right-aligned, so the icon must be placed left of the
+        // rendered word, not on top of its left edge.
+        draw_tri_icon(126 - hebrew_text_width(txt) - 12, 57);
     } else {
         draw_tri_footer_en(kContentX, 56, "=cycle");
     }
@@ -2143,8 +2146,6 @@ const HelpLine kHelpLines[] = {
     {"BT mic gain.", "הגבר מיקרופון", 0},
     {"BT Mic enables", "BT Mic מפעיל", 0},
     {"controller mic path.", "נתיב מיקרופון שלט", 0},
-    {"AudBuf changes", "AudBuf משנה", 0},
-    {"audio buffer size.", "גודל חוצץ שמע", 0},
 
     {"Haptics", "רטט והפטיקס", kHelpHeader},
     {"Hap Gain changes", "Hap Gain משנה", 0},

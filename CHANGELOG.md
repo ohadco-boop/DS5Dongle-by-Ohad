@@ -1,3 +1,8 @@
+## 1.0.5
+- Hide AudBuf from the OLED Settings menu and from the built-in Help; the config field remains internal for compatibility.
+ - Trigger Test footer fix
+- On the Hebrew Trigger Test screen, moved the Triangle icon before the cycle label with a clear gap so it no longer overlaps the word.
+
 ## 1.0.5 - Fast looping Help scroll
 
 
