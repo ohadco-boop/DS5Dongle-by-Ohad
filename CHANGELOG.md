@@ -1,4 +1,10 @@
 ## 1.0.5
+- Added fast hold-to-scroll for D-Pad Up/Down in Settings and Remap.
+- Settings and Remap scrolling keeps wraparound behavior at the top and bottom.
+- Removed Pico LED from the Settings menu and from the built-in Help.
+- Pico LED is kept off by default/fixed without changing the config layout.
+
+## 1.0.5
 - Hide AudBuf from the OLED Settings menu and from the built-in Help; the config field remains internal for compatibility.
  - Trigger Test footer fix
 - On the Hebrew Trigger Test screen, moved the Triangle icon before the cycle label with a clear gap so it no longer overlaps the word.

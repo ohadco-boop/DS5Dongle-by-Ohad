@@ -189,7 +189,7 @@ constexpr int kLbModeBattery = 9;
 constexpr int kNumLbModes = 10;
 
 // Settings screen state
-constexpr int kNumSettingsItems = 21; // visible Settings rows; AudBuf stays internal/fixed for config compatibility
+constexpr int kNumSettingsItems = 20; // visible Settings rows; AudBuf and Pico LED stay internal/fixed for config compatibility
 // Stable item IDs.  These stay mapped to the saved Config_body fields; the
 // visible menu order is controlled by kSettingsOrder below.
 constexpr int kSettingsHapticsGainIdx = 0;
@@ -239,7 +239,6 @@ constexpr int kSettingsOrder[kNumSettingsItems] = {
     kSettingsScrOffIdx,
     kSettingsCtrlWakeIdx,
     kSettingsPowerComboIdx,
-    kSettingsPicoLedIdx,
 
     kSettingsWipeSlotsIdx,
     kSettingsResetIdx,
@@ -253,6 +252,8 @@ static inline int settings_selected_item() { return settings_item_for_row(settin
 bool settings_dirty = false;
 bool settings_init_done = false;
 uint8_t settings_last_dpad = 8;  // 8 = released
+uint8_t settings_repeat_dpad = 8;
+uint32_t settings_next_repeat_us = 0;
 uint8_t settings_last_face = 0;
 const char* settings_save_status = "";  // shown briefly after Triangle press
 uint32_t settings_save_status_until_us = 0;
@@ -271,10 +272,14 @@ int remap_sel = 0;
 bool remap_init_done = false;
 bool remap_dirty = false;
 uint8_t remap_last_dpad = 8;
+uint8_t remap_repeat_dpad = 8;
+uint32_t remap_next_repeat_us = 0;
 uint8_t remap_last_face = 0;
 const char* remap_save_status = "";
 uint32_t remap_save_status_until_us = 0;
 constexpr uint32_t kSaveStatusVisibleUs = 2000000u;
+constexpr uint32_t kMenuRepeatStartUs = 400000; // match Help: first repeat after 0.4 s
+constexpr uint32_t kMenuRepeatEveryUs = 100000; // then continue at a fast readable pace
 
 void settings_set_save_status(const char* s) {
     settings_save_status = s ? s : "";
@@ -284,6 +289,30 @@ void settings_set_save_status(const char* s) {
 void remap_set_save_status(const char* s) {
     remap_save_status = s ? s : "";
     remap_save_status_until_us = remap_save_status[0] ? ((uint32_t)time_us_32() + kSaveStatusVisibleUs) : 0;
+}
+
+void settings_reset_repeat() {
+    settings_repeat_dpad = 8;
+    settings_next_repeat_us = 0;
+}
+
+void remap_reset_repeat() {
+    remap_repeat_dpad = 8;
+    remap_next_repeat_us = 0;
+}
+
+static inline bool dpad_is_up_down(uint8_t dpad) {
+    return dpad == 0 || dpad == 4;
+}
+
+void settings_scroll_step(uint8_t dpad) {
+    if (dpad == 0) settings_sel = (settings_sel - 1 + kNumSettingsItems) % kNumSettingsItems;
+    else if (dpad == 4) settings_sel = (settings_sel + 1) % kNumSettingsItems;
+}
+
+void remap_scroll_step(uint8_t dpad) {
+    if (dpad == 0) remap_sel = (remap_sel - 1 + kNumRemapItems) % kNumRemapItems;
+    else if (dpad == 4) remap_sel = (remap_sel + 1) % kNumRemapItems;
 }
 
 void service_save_status_timeouts() {
@@ -2172,8 +2201,6 @@ const HelpLine kHelpLines[] = {
     {"Power options", "אפשרויות כוח", kHelpHeader},
     {"PowerCombo enables", "PowerCombo מאפשר", 0},
     {"PS + Options off.", "כיבוי עם PS+Options", 0},
-    {"Pico LED controls", "Pico LED שולט", 0},
-    {"the board LED.", "בנורת הלוח", 0},
     {"Power-off path", "בכיבוי בטוח", 0},
     {"saves pending data", "הדונגל שומר מידע", 0},
     {"before disconnecting.", "לפני ניתוק השלט", 0},
@@ -2384,15 +2411,26 @@ bool remap_save_all() {
 }
 
 void remap_handle_input() {
-    if (!bt_is_connected()) return;
+    if (!bt_is_connected()) {
+        remap_last_dpad = 8;
+        remap_reset_repeat();
+        return;
+    }
     const uint8_t dpad = (uint8_t)(interrupt_in_data[7] & 0x0F);
-    if (controller_screen_nav_combo_active()) { remap_last_dpad = dpad; return; }
+    if (controller_screen_nav_combo_active()) {
+        remap_last_dpad = dpad;
+        remap_reset_repeat();
+        return;
+    }
     const uint8_t face = (uint8_t)(interrupt_in_data[7] & 0xF0);
+    const uint32_t now = (uint32_t)time_us_32();
 
-    if (dpad != remap_last_dpad && dpad != 8) {
-        if      (dpad == 0) remap_sel = (remap_sel - 1 + kNumRemapItems) % kNumRemapItems;
-        else if (dpad == 4) remap_sel = (remap_sel + 1) % kNumRemapItems;
-        else if (dpad == 6 || dpad == 2) {
+    if (dpad != remap_last_dpad) {
+        if (dpad_is_up_down(dpad)) {
+            remap_scroll_step(dpad);
+            remap_repeat_dpad = dpad;
+            remap_next_repeat_us = now + kMenuRepeatStartUs;
+        } else if (dpad == 6 || dpad == 2) {
             const int delta = (dpad == 2) ? +1 : -1;
             if (remap_sel == kRemapEnableIdx) {
                 remap_config_local.remap_enable ^= 1;
@@ -2402,9 +2440,19 @@ void remap_handle_input() {
             } else if (remap_sel == kRemapResetIdx) {
                 remap_set_identity_local();
             }
+            remap_reset_repeat();
+        } else {
+            remap_reset_repeat();
         }
+        remap_last_dpad = dpad;
     }
-    remap_last_dpad = dpad;
+
+    if (dpad_is_up_down(dpad) && dpad == remap_repeat_dpad
+        && (int32_t)(now - remap_next_repeat_us) >= 0) {
+        remap_scroll_step(dpad);
+        remap_next_repeat_us = now + kMenuRepeatEveryUs;
+    }
+    if (!dpad_is_up_down(dpad)) remap_reset_repeat();
 
     // Triangle = save. On the Reset item, Triangle first resets to identity,
     // then saves it immediately.
@@ -2653,19 +2701,46 @@ void settings_adjust(int delta) {
     }
 }
 void settings_handle_input() {
-    if (!bt_is_connected()) return;
-    const uint8_t dpad = (uint8_t)(interrupt_in_data[7] & 0x0F);
-    if (controller_screen_nav_combo_active()) { settings_last_dpad = dpad; return; }
-    const uint8_t face = (uint8_t)(interrupt_in_data[7] & 0xF0);
-
-    // Edge-trigger on D-pad direction CHANGE; only pure N/E/S/W to avoid diagonals
-    if (dpad != settings_last_dpad && dpad != 8) {
-        if      (dpad == 0) settings_sel = (settings_sel - 1 + kNumSettingsItems) % kNumSettingsItems;
-        else if (dpad == 4) settings_sel = (settings_sel + 1) % kNumSettingsItems;
-        else if (dpad == 6) settings_adjust(-1);
-        else if (dpad == 2) settings_adjust(+1);
+    if (!bt_is_connected()) {
+        settings_last_dpad = 8;
+        settings_reset_repeat();
+        return;
     }
-    settings_last_dpad = dpad;
+    const uint8_t dpad = (uint8_t)(interrupt_in_data[7] & 0x0F);
+    if (controller_screen_nav_combo_active()) {
+        settings_last_dpad = dpad;
+        settings_reset_repeat();
+        return;
+    }
+    const uint8_t face = (uint8_t)(interrupt_in_data[7] & 0xF0);
+    const uint32_t now = (uint32_t)time_us_32();
+
+    // Up/Down scrolls through Settings. Holding Up/Down repeats quickly and
+    // keeps the existing looping behavior from bottom to top and top to bottom.
+    // Left/Right still changes the selected value once per press.
+    if (dpad != settings_last_dpad) {
+        if (dpad_is_up_down(dpad)) {
+            settings_scroll_step(dpad);
+            settings_repeat_dpad = dpad;
+            settings_next_repeat_us = now + kMenuRepeatStartUs;
+        } else if (dpad == 6) {
+            settings_adjust(-1);
+            settings_reset_repeat();
+        } else if (dpad == 2) {
+            settings_adjust(+1);
+            settings_reset_repeat();
+        } else {
+            settings_reset_repeat();
+        }
+        settings_last_dpad = dpad;
+    }
+
+    if (dpad_is_up_down(dpad) && dpad == settings_repeat_dpad
+        && (int32_t)(now - settings_next_repeat_us) >= 0) {
+        settings_scroll_step(dpad);
+        settings_next_repeat_us = now + kMenuRepeatEveryUs;
+    }
+    if (!dpad_is_up_down(dpad)) settings_reset_repeat();
 
     // Triangle handling — Reset and Wipe-slots items both require a 2 s hold;
     // every other item saves edits on a normal short press.

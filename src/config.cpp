@@ -124,9 +124,13 @@ void config_valid() {
         printf("[Config] disable_auto_disconnect is invalid\n");
     }
     if (body->disable_pico_led > 1) {
-        body->disable_pico_led = 0;
-        printf("[Config] disable_pico_led is invalid\n");
+        body->disable_pico_led = 1;
+        printf("[Config] disable_pico_led is invalid, defaulting to off\n");
     }
+    // Pico LED is no longer user-facing in the OLED menu. Keep it off by
+    // default/fixed so the board LED does not distract during normal use.
+    // Critical battery warnings can still override this temporarily.
+    body->disable_pico_led = 1;
     if (body->polling_rate_mode > 2) {
         body->polling_rate_mode = 2; // Ohad custom default: real-time polling
         printf("[Config] polling_rate_mode is invalid, defaulting to RT\n");
@@ -391,4 +395,9 @@ void set_config(const uint8_t *new_config, const uint16_t len) {
 void set_config(const Config_body &new_config) {
     config.body = new_config;
     config_valid();
+    if (config.body.disable_pico_led) {
+        cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, false);
+    } else {
+        cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, true);
+    }
 }

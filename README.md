@@ -1,5 +1,7 @@
 # DS5Dongle by Ohad v1.0.5
 - OLED Settings keeps audio buffer internal/fixed; `AudBuf` is no longer shown in the menu or built-in Help.
+- Pico LED is hidden from Settings and the board LED is kept off by default/fixed.
+- Holding D-Pad Up/Down now fast-scrolls in Settings and Remap too, with wraparound at the ends.
 
 **DS5Dongle by Ohad** is custom firmware for the Raspberry Pi Pico 2 W with the Waveshare Pico-OLED-1.3 display. It bridges a DualSense controller over Bluetooth to a computer over USB, with an onboard OLED interface for status, settings, audio, remapping, diagnostics, and pairing slots.
 
