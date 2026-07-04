@@ -125,16 +125,17 @@ bool prev_bt_connected = false;
 // Screen ordering — single source of truth. Reorder by editing this block;
 // oled_loop's switch and handle_buttons' KEY1 contextual checks use these
 // names, so the indices can move without touching that code.
+// Order: Status -> Help -> Slots -> feature/status pages -> Settings.
 constexpr int kScreenStatus    = 0;
-constexpr int kScreenSlots     = 1;
-constexpr int kScreenLightbar  = 2;
-constexpr int kScreenTriggers  = 3;
-constexpr int kScreenGyro      = 4;
-constexpr int kScreenTouchpad  = 5;
-constexpr int kScreenRssi      = 6;
-constexpr int kScreenVU        = 7;
-constexpr int kScreenRemap     = 8;
-constexpr int kScreenHelp      = 9;
+constexpr int kScreenHelp      = 1;
+constexpr int kScreenSlots     = 2;
+constexpr int kScreenLightbar  = 3;
+constexpr int kScreenTriggers  = 4;
+constexpr int kScreenGyro      = 5;
+constexpr int kScreenTouchpad  = 6;
+constexpr int kScreenRssi      = 7;
+constexpr int kScreenVU        = 8;
+constexpr int kScreenRemap     = 9;
 constexpr int kScreenSettings  = 10;
 constexpr int kNumScreens      = 11;
 int current_screen = 0;
@@ -189,6 +190,15 @@ constexpr int kNumLbModes = 10;
 
 // Settings screen state
 constexpr int kNumSettingsItems = 22; // fixed65u: InactDC removed; Idle includes Off/1/2/3/5/10/20/30
+// Stable item IDs.  These stay mapped to the saved Config_body fields; the
+// visible menu order is controlled by kSettingsOrder below.
+constexpr int kSettingsHapticsGainIdx = 0;
+constexpr int kSettingsSpeakerVolIdx  = 1;
+constexpr int kSettingsIdleIdx        = 2;
+constexpr int kSettingsPicoLedIdx     = 3;
+constexpr int kSettingsPollingIdx     = 4;
+constexpr int kSettingsAudioBufferIdx = 5;
+constexpr int kSettingsControllerIdx  = 6;
 constexpr int kSettingsAutoHapEnaIdx  = 7;
 constexpr int kSettingsAutoHapGainIdx = 8;
 constexpr int kSettingsAutoHapLpIdx   = 9;
@@ -204,8 +214,43 @@ constexpr int kSettingsAudioKeepIdx   = 18;
 constexpr int kSettingsLanguageIdx    = 19;
 constexpr int kSettingsResetIdx       = 20;
 constexpr int kSettingsWipeSlotsIdx   = 21;
+
+// User-facing order: basic UI/control first, audio/haptics together, display
+// and power behavior together, destructive actions last.
+constexpr int kSettingsOrder[kNumSettingsItems] = {
+    kSettingsLanguageIdx,
+    kSettingsControllerIdx,
+    kSettingsPollingIdx,
+    kSettingsIdleIdx,
+    kSettingsAudioKeepIdx,
+
+    kSettingsSpeakerVolIdx,
+    kSettingsMicGainIdx,
+    kSettingsBtMicIdx,
+    kSettingsAudioBufferIdx,
+
+    kSettingsHapticsGainIdx,
+    kSettingsAutoHapEnaIdx,
+    kSettingsAutoHapGainIdx,
+    kSettingsAutoHapLpIdx,
+
+    kSettingsBrightnessIdx,
+    kSettingsRotationIdx,
+    kSettingsScrDimIdx,
+    kSettingsScrOffIdx,
+    kSettingsCtrlWakeIdx,
+    kSettingsPowerComboIdx,
+    kSettingsPicoLedIdx,
+
+    kSettingsWipeSlotsIdx,
+    kSettingsResetIdx,
+};
+
+static inline int settings_item_for_row(int row) { return kSettingsOrder[row]; }
+
 Config_body settings_local{};
 int settings_sel = 0;
+static inline int settings_selected_item() { return settings_item_for_row(settings_sel); }
 bool settings_dirty = false;
 bool settings_init_done = false;
 uint8_t settings_last_dpad = 8;  // 8 = released
@@ -2086,8 +2131,9 @@ __attribute__((noinline)) void render_screen_remap() {
 
 void settings_adjust(int delta) {
     Config_body &c = settings_local;
+    const int item = settings_selected_item();
     settings_dirty = true;
-    switch (settings_sel) {
+    switch (item) {
         case 0: { // haptics_gain  [1.0, 2.0] step 0.1
             int v = (int)(c.haptics_gain * 10.0f + 0.5f) + delta;
             if (v < 10) v = 10; if (v > 20) v = 20;
@@ -2221,8 +2267,9 @@ void settings_handle_input() {
     // every other item saves edits on a normal short press.
     const bool tri_now = (face & 0x80) != 0;
     const bool tri_prev = (settings_last_face & 0x80) != 0;
-    const bool is_hold_item = (settings_sel == kSettingsResetIdx
-                               || settings_sel == kSettingsWipeSlotsIdx);
+    const int selected_item = settings_selected_item();
+    const bool is_hold_item = (selected_item == kSettingsResetIdx
+                               || selected_item == kSettingsWipeSlotsIdx);
     if (tri_now && !tri_prev) {
         settings_tri_press_us = (uint32_t)time_us_32();
         settings_reset_triggered = false;
@@ -2230,7 +2277,7 @@ void settings_handle_input() {
     if (is_hold_item && tri_now && !settings_reset_triggered
         && ((uint32_t)time_us_32() - settings_tri_press_us) >= kResetHoldUs) {
         settings_reset_triggered = true;
-        if (settings_sel == kSettingsResetIdx) {
+        if (selected_item == kSettingsResetIdx) {
             config_default();
             if (config_save()) {
                 settings_local = get_config();
@@ -2265,9 +2312,10 @@ void settings_handle_input() {
     settings_last_face = face;
 }
 
-__attribute__((noinline)) void format_settings_item(int idx, char* line, size_t n) {
+__attribute__((noinline)) void format_settings_item(int row, char* line, size_t n) {
     const Config_body &c = settings_local;
-    const char *cur = (idx == settings_sel) ? ">" : " ";
+    const int idx = settings_item_for_row(row);
+    const char *cur = (row == settings_sel) ? ">" : " ";
     switch (idx) {
         case 0: {
             int g = (int)(c.haptics_gain * 10.0f + 0.5f);
@@ -2419,8 +2467,9 @@ void format_settings_value(int idx, char* out, size_t n) {
     }
 }
 
-void draw_settings_item_he(int idx, int y) {
-    const bool sel = (idx == settings_sel);
+void draw_settings_item_he(int row, int y) {
+    const int idx = settings_item_for_row(row);
+    const bool sel = (row == settings_sel);
     draw_char(kContentX, y, sel ? '>' : ' ');
     char value[18];
     format_settings_value(idx, value, sizeof(value));
@@ -2441,15 +2490,16 @@ __attribute__((noinline)) void render_screen_settings() {
     int top = 0;
     if (settings_sel >= kVisible) top = settings_sel - kVisible + 1;
 
+    const int selected_item = settings_selected_item();
     if (ui_hebrew()) {
         const char *st = oled_status_he(settings_save_status);
         draw_hebrew_r(126, 0, st[0] ? st : (settings_dirty ? "הגדרות *" : "הגדרות"));
         for (int i = 0; i < kVisible && top + i < kNumSettingsItems; i++) {
             draw_settings_item_he(top + i, 9 + i * 9);
         }
-        if (settings_sel == kSettingsResetIdx) {
+        if (selected_item == kSettingsResetIdx) {
             draw_tri_footer_he_hold("לאיפוס");
-        } else if (settings_sel == kSettingsWipeSlotsIdx) {
+        } else if (selected_item == kSettingsWipeSlotsIdx) {
             draw_tri_footer_he_hold("למחיקה");
         } else {
             draw_tri_footer_he_save();
@@ -2468,9 +2518,9 @@ __attribute__((noinline)) void render_screen_settings() {
             draw_text(kContentX, 9 + i * 9, line);
         }
 
-        if (settings_sel == kSettingsResetIdx) {
+        if (selected_item == kSettingsResetIdx) {
             draw_tri_footer_en(kContentX, 56, " hold=RESET");
-        } else if (settings_sel == kSettingsWipeSlotsIdx) {
+        } else if (selected_item == kSettingsWipeSlotsIdx) {
             draw_tri_footer_en(kContentX, 56, " hold=WIPE");
         } else {
             draw_tri_footer_en(kContentX, 56, "=save");

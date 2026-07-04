@@ -27,7 +27,7 @@ Firmware מותאם ל-Raspberry Pi Pico 2 W עם מסך Waveshare Pico-OLED-1.3
 - USB Audio ב-48 kHz.
 - תמיכה במיקרופון BT של השלט.
 - AudioKeep: השלט לא נכבה בגלל Idle בזמן שיש אודיו פעיל.
-- OLED 128x64 עם מסכי Status, Slots, Lightbar, Trigger Test, Gyro, Touchpad, Diagnostics, BT Signal, VU, Settings ו-Remap.
+- OLED 128x64 עם מסכי Status, Help, Slots, Lightbar, Trigger Test, Gyro, Touchpad, BT Signal, VU, Remap ו-Settings.
 - Remap ל-19 כפתורים כולל Off ו-PicoMic.
 - PowerCombo: PS + Options לניתוק/כיבוי בטוח.
 - Multi-slot pairing עד 4 סלוטים.
@@ -80,4 +80,4 @@ DS5Dongle-by-Ohad-1.0.5.uf2
 
 ## מסך עזרה ב־OLED
 
-בגרסה 1.0.5 נוסף מסך **עזרה** מובנה ב־OLED. המסך מציג הוראות בסיסיות: ניווט עם KEY0/KEY1, ניווט עם Options + D-pad מהשלט, גלילה בתפריטים, שמירה עם משולש, כיבוי שלט עם PS + Options, הסבר על אודיו מעיר וצימוד שלט חדש. המסך לקריאה בלבד ולא משנה הגדרות.
+בגרסה 1.0.5 נוסף מסך **עזרה** מובנה ב־OLED, והוא ממוקם מיד אחרי Status ולפני Slots. המסך מציג הוראות בסיסיות: ניווט עם KEY0/KEY1, ניווט עם Options + D-pad מהשלט, גלילה בתפריטים, שמירה עם משולש, כיבוי שלט עם PS + Options, הסבר על אודיו מעיר וצימוד שלט חדש. המסך לקריאה בלבד ולא משנה הגדרות.

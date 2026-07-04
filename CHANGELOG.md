@@ -1,4 +1,6 @@
 # CHANGELOG
+- Reordered OLED screen rotation so Help appears immediately after Status and before Slots.
+- Reordered the Settings menu into logical groups: language/control, power/audio, haptics, display, then maintenance actions.
 - Added a new OLED Help screen with a compact on-device quick guide: Pico/OLED navigation, controller navigation, saving, power-off, AudioKeep, and pairing.
 - Help scrolls with D-pad Up/Down and does not write to Flash or touch audio paths.
 - Hebrew popups now call the microphone `מיק שלט` instead of exposing the Pico name.

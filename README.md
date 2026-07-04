@@ -31,7 +31,7 @@ This package includes the Audio Route Fix for browser/tester audio recovery. If 
 - USB Audio at 48 kHz.
 - Bluetooth microphone path from the controller.
 - AudioKeep: prevents Idle shutdown while audio is active.
-- 128x64 OLED UI with Status, Slots, Lightbar, Trigger Test, Gyro, Touchpad, Diagnostics, BT Signal, VU, Settings, and Remap screens.
+- 128x64 OLED UI with Status, Help, Slots, Lightbar, Trigger Test, Gyro, Touchpad, BT Signal, VU, Remap, and Settings screens.
 - Button remapping for 19 inputs, including special `Off` and `PicoMic` targets.
 - PowerCombo: `PS + Options` for safe controller disconnect/poweroff.
 - Multi-slot pairing with up to 4 slots.
@@ -97,4 +97,4 @@ Version 1.0.5 now stores OLED Settings in a safe app-owned flash sector instead 
 
 ## OLED Help Screen
 
-Firmware 1.0.5 includes a built-in **Help** screen on the OLED. It summarizes the basic controls: KEY0/KEY1 screen navigation, Options + D-pad screen navigation from the controller, D-pad menu scrolling, Triangle save, PS + Options controller power-off, AudioKeep behavior, and controller pairing. The Help screen is read-only and does not change settings.
+Firmware 1.0.5 includes a built-in **Help** screen on the OLED, placed immediately after Status and before Slots. It summarizes the basic controls: KEY0/KEY1 screen navigation, Options + D-pad screen navigation from the controller, D-pad menu scrolling, Triangle save, PS + Options controller power-off, AudioKeep behavior, and controller pairing. The Help screen is read-only and does not change settings.
